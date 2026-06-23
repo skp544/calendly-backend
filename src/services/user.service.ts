@@ -7,5 +7,11 @@ export async function findAllUsersService() {
 }
 
 export async function findUserByIdService(id: number) {
-  return await getById(id);
+  const user = await getById(id);
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return user;
 }

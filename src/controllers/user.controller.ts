@@ -17,3 +17,8 @@ export async function findUserById(req: Request, res: Response) {
 
   return res.status(200).json(response);
 }
+
+export async function createUser(req: Request, res: Response) {
+  console.log("req.body", req.body);
+  res.json({});
+}
