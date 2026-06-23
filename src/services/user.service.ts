@@ -1,4 +1,5 @@
 import { getAll, getById } from "../repositories/user.repository.js";
+import { ApiError, notFound } from "../utils/api-error.js";
 
 export async function findAllUsersService() {
   const users = await getAll();
@@ -10,7 +11,7 @@ export async function findUserByIdService(id: number) {
   const user = await getById(id);
 
   if (!user) {
-    throw new Error("User not found");
+    throw notFound("User not found");
   }
 
   return user;

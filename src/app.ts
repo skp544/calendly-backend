@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from "express";
 import userRouter from "./routes/user.routes.js";
 import { errorHandler } from "./middlewares/error-handler.js";
+import { ApiError } from "./utils/api-error.js";
 
 const app: Express = express();
 
