@@ -2,6 +2,7 @@ import express, { Express, Request, Response, NextFunction } from "express";
 import userRouter from "./routes/user.routes.js";
 import { errorHandler } from "./middlewares/error-handler.js";
 import { ApiError } from "./utils/api-error.js";
+import { routeNotFound } from "./middlewares/route-not-found.js";
 
 const app: Express = express();
 
@@ -24,6 +25,7 @@ app.get("/health", logRequest, (_req, res) => {
 // app router
 app.use("/api/v1/users", userRouter);
 
+app.use(routeNotFound);
 app.use(errorHandler);
 
 export { app };
