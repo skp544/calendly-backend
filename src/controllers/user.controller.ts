@@ -3,11 +3,12 @@ import {
   findAllUsersService,
   findUserByIdService,
 } from "../services/user.service.js";
+import { sendSuccess } from "../utils/api-response.js";
 
-export async function findAllUsers(req: Request, res: Response) {
+export async function findAllUsers(_req: Request, res: Response) {
   const response = await findAllUsersService();
 
-  return res.status(200).json(response);
+  sendSuccess(res, response);
 }
 
 export async function findUserById(req: Request, res: Response) {
@@ -15,7 +16,7 @@ export async function findUserById(req: Request, res: Response) {
 
   const response = await findUserByIdService(Number(id));
 
-  return res.status(200).json(response);
+  sendSuccess(res, response);
 }
 
 export async function createUser(req: Request, res: Response) {
