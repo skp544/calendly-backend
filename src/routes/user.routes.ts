@@ -4,6 +4,8 @@ import {
   findAllUsers,
   findUserById,
 } from "../controllers/user.controller.js";
+import { validate } from "../middlewares/validate.js";
+import { createUserSchema } from "../dtos/user.dto.js";
 
 const userRouter: Router = Router();
 
@@ -11,6 +13,6 @@ userRouter.get("/", findAllUsers);
 
 userRouter.get("/:id", findUserById);
 
-userRouter.post("/", createUser);
+userRouter.post("/", validate(createUserSchema), createUser);
 
 export default userRouter;
