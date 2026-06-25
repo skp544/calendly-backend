@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx watch src/server.ts",
+    "dev": "nodemon --watch src --ext ts --exec \"tsx src/server.ts\"",
     "prisma:format": "pnpm prisma format",
     "prisma:migrate": "pnpm prisma migrate dev",
     "prisma:generate": "pnpm prisma generate"
