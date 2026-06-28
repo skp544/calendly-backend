@@ -4,7 +4,7 @@ import {
   deleteById,
   findByEmail,
   getAll,
-  getById,
+  getUserById,
   updateById,
 } from "../repositories/user.repository.js";
 import { conflict, notFound } from "../utils/api-error.js";
@@ -16,7 +16,7 @@ export async function findAllUsersService() {
 }
 
 export async function findUserByIdService(id: number) {
-  const user = await getById(id);
+  const user = await getUserById(id);
 
   if (!user) {
     throw notFound("User not found");
@@ -56,7 +56,7 @@ export async function updateUserService(id: number, data: updateUserDto) {
 }
 
 export async function removeUserService(id: number) {
-  const user = await getById(id);
+  const user = await getUserById(id);
 
   if (!user) {
     throw notFound("User not found");
