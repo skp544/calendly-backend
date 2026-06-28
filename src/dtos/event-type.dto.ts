@@ -19,6 +19,15 @@ export const createEventTypeSchema = z.object({
 
   bufferMoreMinutes: z.number().min(0).max(120).default(0),
   bufferLessMinutes: z.number().min(0).max(120).default(0),
+
+  slug: z
+    .string()
+    .min(1, "Slug must be at least 1 characters")
+    .max(100, "Slug must be less than 100 characters")
+    .regex(
+      /^[a-z0-9]+(-[a-z0-9]+)*$/,
+      "Slug must be lowercase and can only contain letters, numbers, and hyphens",
+    ),
 });
 
 export const updateEventTypeSchema = createEventTypeSchema.partial();

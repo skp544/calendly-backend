@@ -52,3 +52,14 @@ export async function remove(id: number) {
 
   return eventType;
 }
+
+export async function findByHostAndSlug(hostId: number, slug: string) {
+  const eventType = await prisma.eventType.findFirst({
+    where: {
+      hostId,
+      slug,
+    },
+  });
+
+  return eventType;
+}
