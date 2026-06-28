@@ -13,15 +13,17 @@ datasource db {
 }
 
 model User {
-  id          Int         @id @default(autoincrement())
-  email       String      @unique
-  name        String
-  slug        String      @unique
-  timezone    String      @default("UTC")
-  event_types EventType[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  deletedAt   DateTime?
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  name      String
+  slug      String    @unique
+  timezone  String    @default("UTC")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  event_types       EventType[]
+  availabilityRules AvailabilityRule[]
 
   @@map("users")
 }
@@ -48,4 +50,21 @@ model EventType {
 
   @@unique([hostId, slug])
   @@map("event_types")
+}
+
+model AvailabilityRule {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  weekday   Int
+  startTime String
+  endTime   String
+  timezone  String @default("UTC")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, weekday])
+  @@map("availability_rules")
 }
