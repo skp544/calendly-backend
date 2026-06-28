@@ -17,8 +17,8 @@ export const createEventTypeSchema = z.object({
   locationType: z.enum(["online", "offline"]).default("online"),
   locationValue: z.string().optional(),
 
-  bufferMoreMinutes: z.number().min(0).max(120).default(0),
-  bufferLessMinutes: z.number().min(0).max(120).default(0),
+  bufferBeforeMinutes: z.number().min(0).max(120).default(0),
+  bufferAfterMinutes: z.number().min(0).max(120).default(0),
 
   slug: z
     .string()
