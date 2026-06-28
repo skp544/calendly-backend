@@ -3,6 +3,7 @@ import {
   createEventTypeDto,
   updateEventTypeDto,
 } from "../dtos/event-type.dto.js";
+import { notFound } from "../utils/api-error.js";
 
 export async function getByHostId(hostId: number) {
   const eventTypes = await prisma.eventType.findMany({
@@ -23,7 +24,10 @@ export async function getById(id: number) {
   return eventType;
 }
 
-export async function create(hostId: number, data: createEventTypeDto) {
+export async function create(
+  hostId: number,
+  data: createEventTypeDto & { slug: string },
+) {
   const eventType = await prisma.eventType.create({
     data: {
       hostId,
@@ -73,4 +77,19 @@ export async function slugExistsForHost(hostId: number, slug: string) {
   });
 
   return eventType !== null;
+}
+
+export async function findActiveByHostIdAndEventSlug(
+  hostId: number,
+  slug: string,
+) {
+  const eventType = await prisma.eventType.findFirst({
+    where: {
+      hostId,
+      slug,
+      isActive: true,
+    },
+  });
+
+  return eventType;
 }

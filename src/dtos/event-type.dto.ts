@@ -27,7 +27,8 @@ export const createEventTypeSchema = z.object({
     .regex(
       /^[a-z0-9]+(-[a-z0-9]+)*$/,
       "Slug must be lowercase and can only contain letters, numbers, and hyphens",
-    ),
+    )
+    .optional(),
 });
 
 export const updateEventTypeSchema = createEventTypeSchema.partial();
