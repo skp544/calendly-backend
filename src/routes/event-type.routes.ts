@@ -7,6 +7,7 @@ import {
   updateEventType,
 } from "../controllers/event-type.controller.js";
 import { validate } from "../middlewares/validate.js";
+import { requireUserId } from "../middlewares/require-user-id.js";
 import {
   createEventTypeSchema,
   updateEventTypeSchema,
@@ -14,22 +15,16 @@ import {
 
 const eventTypeRouter: Router = Router();
 
-eventTypeRouter.get("/host/:hostId", listEventTypes);
+eventTypeRouter.use(requireUserId);
 
-eventTypeRouter.get("/host/:hostId/:id", getEventTypeById);
+eventTypeRouter.get("/", listEventTypes);
 
-eventTypeRouter.post(
-  "/host/:hostId",
-  validate(createEventTypeSchema),
-  createEventType,
-);
+eventTypeRouter.get("/:id", getEventTypeById);
 
-eventTypeRouter.patch(
-  "/host/:hostId/:id",
-  validate(updateEventTypeSchema),
-  updateEventType,
-);
+eventTypeRouter.post("/", validate(createEventTypeSchema), createEventType);
 
-eventTypeRouter.delete("/host/:hostId/:id", removeEventType);
+eventTypeRouter.patch("/:id", validate(updateEventTypeSchema), updateEventType);
+
+eventTypeRouter.delete("/:id", removeEventType);
 
 export default eventTypeRouter;

@@ -10,34 +10,36 @@ import {
 import { sendSuccess } from "../utils/api-response.js";
 
 export async function listEventTypes(req: Request, res: Response) {
-  const { hostId } = req.params;
+  const hostId = req.hostId as number;
 
-  const eventTypes = await listEventTypeService(Number(hostId));
+  const eventTypes = await listEventTypeService(hostId);
 
   sendSuccess(res, eventTypes);
 }
 
 export async function createEventType(req: Request, res: Response) {
-  const { hostId } = req.params;
+  const hostId = req.hostId as number;
 
-  const eventType = await createEventTypeService(Number(hostId), req.body);
+  const eventType = await createEventTypeService(hostId, req.body);
 
   sendSuccess(res, eventType, 201, "Event type created successfully");
 }
 
 export async function getEventTypeById(req: Request, res: Response) {
-  const { hostId, id } = req.params;
+  const hostId = req.hostId as number;
+  const { id } = req.params;
 
-  const eventType = await getEventTypeByIdService(Number(hostId), Number(id));
+  const eventType = await getEventTypeByIdService(hostId, Number(id));
 
   sendSuccess(res, eventType);
 }
 
 export async function updateEventType(req: Request, res: Response) {
-  const { hostId, id } = req.params;
+  const hostId = req.hostId as number;
+  const { id } = req.params;
 
   const eventType = await updateEventTypeService(
-    Number(hostId),
+    hostId,
     Number(id),
     req.body,
   );
@@ -46,9 +48,10 @@ export async function updateEventType(req: Request, res: Response) {
 }
 
 export async function removeEventType(req: Request, res: Response) {
-  const { hostId, id } = req.params;
+  const hostId = req.hostId as number;
+  const { id } = req.params;
 
-  const eventType = await removeEventTypeService(Number(hostId), Number(id));
+  const eventType = await removeEventTypeService(hostId, Number(id));
 
   sendSuccess(res, eventType, 200, "Event type removed successfully");
 }
