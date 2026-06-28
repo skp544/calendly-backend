@@ -38,7 +38,7 @@ export async function createUserService(data: createUserDto) {
 }
 
 export async function updateUserService(id: number, data: updateUserDto) {
-  const user = await getById(id);
+  const user = await getUserById(id);
 
   if (!user) {
     throw notFound("User not found");
