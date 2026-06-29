@@ -6,6 +6,11 @@ export const createUserSchema = z.object({
     .string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be less than 100 characters"),
+  slug: z
+    .string()
+    .min(1, "Slug must be at least 1 characters")
+    .max(100, "Slug must be less than 100 characters")
+    .optional(),
 });
 
 export type createUserDto = z.infer<typeof createUserSchema>;

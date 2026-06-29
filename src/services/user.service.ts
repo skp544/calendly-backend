@@ -1,3 +1,4 @@
+import slug from "slug";
 import { createUserDto, updateUserDto } from "../dtos/user.dto.js";
 import {
   create,
@@ -32,7 +33,8 @@ export async function createUserService(data: createUserDto) {
     throw conflict("User already exists!");
   }
 
-  const user = await create(data);
+  const slugPassed = data.slug ? data.slug : slug(data.name, { lower: true });
+  const user = await create({ ...data, slug: slugPassed }); // todo: make the slug unique
 
   return user;
 }
