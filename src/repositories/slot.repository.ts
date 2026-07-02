@@ -12,7 +12,7 @@ export async function findBookSlotsByHostInRange(
         gte: startDate,
         lte: endDate,
       },
-      status: "booked",
+      status: "BOOKED",
     },
   });
 }

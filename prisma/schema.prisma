@@ -41,7 +41,7 @@ model EventType {
 
   durationMinutes     Int
   isActive            Boolean @default(true)
-  locationType        String  @default("online")
+  locationType        String  @default("ONLINE")
   locationValue       String?
   bufferBeforeMinutes Int     @default(0)
   bufferAfterMinutes  Int     @default(0)
@@ -101,7 +101,7 @@ model Slot {
   eventTypeId Int
   startAt     DateTime
   endAt       DateTime
-  status      String   @default("available")
+  status      String   @default("AVAILABLE")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
