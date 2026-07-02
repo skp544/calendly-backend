@@ -92,3 +92,7 @@ export async function findActiveByHostIdAndEventSlug(
 
   return eventType;
 }
+
+export async function findActiveEventTypesByHost(hostId: number) {
+  return prisma.eventType.findMany({ where: { hostId, isActive: true } });
+}

@@ -1,0 +1,18 @@
+import { prisma } from "../config/database.js";
+
+export async function findBookSlotsByHostInRange(
+  hostId: number,
+  startDate: Date,
+  endDate: Date,
+) {
+  return prisma.slot.findMany({
+    where: {
+      hostId,
+      startAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+      status: "booked",
+    },
+  });
+}
