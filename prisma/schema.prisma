@@ -59,12 +59,13 @@ model EventType {
 }
 
 model AvailabilityRule {
-  id        Int    @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   userId    Int
   weekday   Int
   startTime String
   endTime   String
-  timezone  String @default("UTC")
+  isActive  Boolean @default(true)
+  timezone  String  @default("UTC")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
