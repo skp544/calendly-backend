@@ -25,7 +25,7 @@ export const createAvailabilityRuleSchema =
   );
 
 export const updateAvailabilityRuleSchema =
-  createAvailabilityRuleSchema.partial();
+  createAvailabilityRuleBaseSchema.partial();
 
 export type createAvailabilityRuleDto = z.infer<
   typeof createAvailabilityRuleSchema
@@ -73,7 +73,7 @@ export const createAvailabilityExceptionSchema =
   });
 
 export const updateAvailabilityExceptionSchema =
-  createAvailabilityExceptionSchema.partial();
+  createAvailabilityExceptionBaseSchema.partial();
 
 export type createAvailabilityExceptionDto = z.infer<
   typeof createAvailabilityExceptionSchema
