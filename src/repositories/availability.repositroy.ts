@@ -10,7 +10,14 @@ import {
 
 export async function findRulesByUser(userId: number, isActive?: boolean) {
   return prisma.availabilityRule.findMany({
-    where: { userId, ...(isActive !== undefined && { isActive }) },
+    where: { userId },
+    orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+  });
+}
+
+export async function findActiveRulesByUser(userId: number) {
+  return prisma.availabilityRule.findMany({
+    where: { userId, isActive: true },
     orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
   });
 }

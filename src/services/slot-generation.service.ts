@@ -105,7 +105,7 @@ export function subtractWindows(
 
     if (!interval.overlaps(blockInterval)) {
       result.push(window);
-      return result;
+      continue;
     }
 
     if (block.start > window.start) {
@@ -157,7 +157,7 @@ export function applyExceptionsForDate(
     if (ex.type === "BLOCK_PARTIAL" && ex.startTime && ex.endTime) {
       const block = {
         start: parseTimeOnDate(data, ex.startTime, ex.timezone),
-        end: parseTimeOnDate(data, ex.startTime, ex.timezone),
+        end: parseTimeOnDate(data, ex.endTime, ex.timezone),
       };
 
       windows = subtractWindows(windows, block);
@@ -171,4 +171,24 @@ export function applyExceptionsForDate(
     }
   }
   return mergeWindows(windows);
+}
+
+export function windowsForWeekdayRule(
+  date: DateTime,
+  weekday: number,
+  startTime: string,
+  endTime: string,
+  timezone: string,
+): TimeWindow[] {
+  const localDate = date.setZone(timezone).startOf("day");
+  const luxonWeekDay = weekday === 0 ? 7 : weekday;
+
+  if (localDate.weekday !== luxonWeekDay) return [];
+
+  const start = parseTimeOnDate(localDate, startTime, timezone);
+  const end = parseTimeOnDate(localDate, endTime, timezone);
+
+  if (!start.isValid || !end.isValid || start >= end) return [];
+
+  return [{ start, end }];
 }
