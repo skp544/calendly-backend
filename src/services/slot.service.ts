@@ -118,6 +118,7 @@ export async function regenerateHostsSlot(input: RegenerateHostsSlotInput) {
         const endAt = slot.end.toUTC().toJSDate();
 
         const key = `${eventType.id}|${startAt.toISOString()}|${endAt.toISOString()}`;
+        generatedValidSlotKeys.add(key);
         await upsertAvailableSlot(
           input.hostId,
           eventType.id,
