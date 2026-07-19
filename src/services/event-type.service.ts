@@ -60,7 +60,12 @@ export async function removeEventTypeService(hostId: number, id: number) {
     throw forbidden("You're not authorized to delete this event type");
   }
 
-  return remove(id);
+  const removeEventType = remove(id);
+  await startRegenerateHostSlotWorkflow({
+    hostId,
+  });
+
+  return removeEventType;
 }
 
 export async function getEventTypeByIdService(hostId: number, id: number) {
@@ -102,7 +107,13 @@ export async function updateEventTypeService(
     }
   }
 
-  return update(id, data);
+  const updatedEventType = update(id, data);
+
+  await startRegenerateHostSlotWorkflow({
+    hostId,
+  });
+
+  return updatedEventType;
 }
 
 export async function getEventTypeByPublicService(

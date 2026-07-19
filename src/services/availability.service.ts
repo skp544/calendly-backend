@@ -16,6 +16,7 @@ import {
   updateException,
   removeException,
 } from "../repositories/availability.repositroy.js";
+import { startRegenerateHostSlotWorkflow } from "../temporal/client.js";
 import { forbidden, notFound } from "../utils/api-error.js";
 
 export async function listRulesService(userId: number) {
@@ -29,6 +30,10 @@ export async function createRuleService(
   data: createAvailabilityRuleDto,
 ) {
   const rule = await createRule(userId, data);
+
+  await startRegenerateHostSlotWorkflow({
+    hostId: userId,
+  });
 
   return rule;
 }
@@ -62,7 +67,12 @@ export async function updateRuleService(
     throw forbidden("You're not authorized to update this availability rule");
   }
 
-  return updateRule(ruleId, data);
+  const updatedRule = updateRule(ruleId, data);
+
+  await startRegenerateHostSlotWorkflow({
+    hostId: userId,
+  });
+  return updatedRule;
 }
 
 export async function listExceptionsService(userId: number) {
@@ -76,6 +86,10 @@ export async function createExceptionService(
   data: createAvailabilityExceptionDto,
 ) {
   const exception = await createException(userId, data);
+
+  await startRegenerateHostSlotWorkflow({
+    hostId: userId,
+  });
 
   return exception;
 }
@@ -96,7 +110,12 @@ export async function removeExceptionService(
     );
   }
 
-  return removeException(exceptionId);
+  const removedException = removeException(exceptionId);
+  await startRegenerateHostSlotWorkflow({
+    hostId: userId,
+  });
+
+  return removedException;
 }
 
 export async function updateExceptionService(
@@ -116,5 +135,11 @@ export async function updateExceptionService(
     );
   }
 
-  return updateException(exceptionId, data);
+  const updatedException = updateException(exceptionId, data);
+
+  await startRegenerateHostSlotWorkflow({
+    hostId: userId,
+  });
+
+  return updatedException;
 }
