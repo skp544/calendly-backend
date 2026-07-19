@@ -1,18 +1,20 @@
 import { prisma } from "../config/database.js";
 import { CreateBookingDto } from "../dtos/booking.dto.js";
-import { Slot } from "../../generated/prisma/client.js";
 import { badRequest, notFound } from "../utils/api-error.js";
+import {
+  createBookingRecord,
+  findSlotById,
+  findSlotByIdForUpdate,
+  markSlotAsBooked,
+  markSlotAsBookedIfAvailable,
+} from "../repositories/booking.repository.js";
 
 export async function createBookingService(
   userId: string,
   dto: CreateBookingDto,
 ) {
   const booking = await prisma.$transaction(async (tx) => {
-    const slot = await tx.slot.findUnique({
-      where: {
-        id: dto.slotId,
-      },
-    });
+    const slot = await findSlotById(tx, dto.slotId);
 
     if (!slot) {
       throw notFound("Slot not found!");
@@ -26,33 +28,19 @@ export async function createBookingService(
       throw badRequest("Slot has already started");
     }
 
-    const updated = await tx.slot.updateMany({
-      where: {
-        id: dto.slotId,
-        status: "AVAILABLE",
-      },
-      data: {
-        status: "BOOKED",
-      },
-    });
+    const updated = await markSlotAsBookedIfAvailable(tx, dto.slotId);
 
     if (updated.count !== 1) {
       throw badRequest("Slot is not available");
     }
 
-    return tx.booking.create({
-      data: {
-        slotId: dto.slotId,
-        inviteeEmail: dto.inviteeEmail,
-        inviteeName: dto.inviteeName,
-        inviteeNote: dto.inviteeNotes,
-        status: "CONFIRMED",
-        hostId: Number(userId),
-        eventTypeId: slot.eventTypeId,
-      },
-      include: {
-        slot: true,
-      },
+    return createBookingRecord(tx, {
+      slotId: dto.slotId,
+      inviteeEmail: dto.inviteeEmail,
+      inviteeName: dto.inviteeName,
+      inviteeNote: dto.inviteeNotes,
+      hostId: Number(userId),
+      eventTypeId: slot.eventTypeId,
     });
   });
 
@@ -74,9 +62,7 @@ export async function createBookingServiceWithPessimisticLock(
     // Locks the row for the duration of the transaction so no other
     // transaction can read/update it until this one commits or rolls back —
     // the concurrent-booking check below is safe without a conditional update.
-    const [slot] = await tx.$queryRaw<Slot[]>`
-      SELECT * FROM "slots" WHERE "id" = ${dto.slotId} FOR UPDATE
-    `;
+    const slot = await findSlotByIdForUpdate(tx, dto.slotId);
 
     if (!slot) {
       throw notFound("Slot not found!");
@@ -90,28 +76,15 @@ export async function createBookingServiceWithPessimisticLock(
       throw badRequest("Slot has already started");
     }
 
-    await tx.slot.update({
-      where: {
-        id: dto.slotId,
-      },
-      data: {
-        status: "BOOKED",
-      },
-    });
+    await markSlotAsBooked(tx, dto.slotId);
 
-    return tx.booking.create({
-      data: {
-        slotId: dto.slotId,
-        inviteeEmail: dto.inviteeEmail,
-        inviteeName: dto.inviteeName,
-        inviteeNote: dto.inviteeNotes,
-        status: "CONFIRMED",
-        hostId: Number(userId),
-        eventTypeId: slot.eventTypeId,
-      },
-      include: {
-        slot: true,
-      },
+    return createBookingRecord(tx, {
+      slotId: dto.slotId,
+      inviteeEmail: dto.inviteeEmail,
+      inviteeName: dto.inviteeName,
+      inviteeNote: dto.inviteeNotes,
+      hostId: Number(userId),
+      eventTypeId: slot.eventTypeId,
     });
   });
 
