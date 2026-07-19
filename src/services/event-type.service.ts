@@ -14,6 +14,7 @@ import {
 } from "../repositories/event-type.repository.js";
 import { conflict, forbidden, notFound } from "../utils/api-error.js";
 import { getUserById } from "../repositories/user.repository.js";
+import { startRegenerateHostSlotWorkflow } from "../temporal/client.js";
 
 export async function listEventTypeService(hostId: number) {
   const eventType = await getByHostId(hostId);
@@ -35,11 +36,15 @@ export async function createEventTypeService(
 
   if (isSlugTaken) {
     throw conflict(
-      "A event type with this slug already exists, please use differenct slug",
+      "A event type with this slug already exists, please use different slug",
     );
   }
 
   const eventType = await create(hostId, { ...data, slug: slugPast });
+
+  await startRegenerateHostSlotWorkflow({
+    hostId,
+  });
 
   return eventType;
 }

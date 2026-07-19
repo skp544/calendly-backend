@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --watch src --ext ts --exec \"tsx src/server.ts\"",
+    "dev:worker": "nodemon --watch src --ext ts --exec \"tsx src/temporal/worker.ts\"", 
     "prisma:format": "pnpm prisma format",
     "prisma:migrate": "pnpm prisma migrate dev",
     "prisma:generate": "pnpm prisma generate",

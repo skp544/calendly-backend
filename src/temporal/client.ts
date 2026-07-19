@@ -38,7 +38,7 @@ async function startWorkflow(
   }
 }
 
-export async function regenerateHostSlotWorkflow(
+export async function startRegenerateHostSlotWorkflow(
   input: RegenerateHostsSlotInput,
 ) {
   return startWorkflow(
