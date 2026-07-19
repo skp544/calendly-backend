@@ -1,6 +1,6 @@
 # Calendly
 
-A TypeScript + Express REST API for a Calendly-style scheduling backend, backed by PostgreSQL (via Prisma) and Temporal for async slot generation workflows.
+A TypeScript + Express REST API for a Calendly-style scheduling backend, backed by PostgreSQL (via Prisma) and Temporal for async slot generation and email-notification workflows.
 
 ## Tech Stack
 
@@ -8,12 +8,13 @@ A TypeScript + Express REST API for a Calendly-style scheduling backend, backed 
 - **Framework:** Express 5
 - **Language:** TypeScript
 - **Database:** PostgreSQL with [Prisma](https://www.prisma.io/) ORM (pg adapter)
-- **Workflows:** [Temporal](https://temporal.io/) (client + worker) for slot regeneration
+- **Workflows:** [Temporal](https://temporal.io/) (client + worker) for slot regeneration and booking confirmation emails
+- **Email:** [Nodemailer](https://nodemailer.com/) (SMTP), caught locally by MailHog
 - **Validation:** Zod
 - **Dates/times:** Luxon
 - **Package manager:** pnpm
 - **Dev tooling:** tsx, nodemon
-- **Local infra:** Docker Compose (Temporal server + Temporal UI)
+- **Local infra:** Docker Compose (Temporal server + Temporal UI + MailHog)
 
 ## Project Structure
 
@@ -24,23 +25,25 @@ src/
 ├── config/
 │   ├── database.ts                 # Prisma/DB connection
 │   ├── env.ts                      # Environment variable loading
-│   └── temporal.ts                 # Temporal client connection
+│   ├── temporal.ts                 # Temporal client connection
+│   └── nodemailer.ts               # SMTP transporter (Nodemailer)
 ├── controllers/                    # Request/response handling
 ├── services/                       # Business logic
 ├── repositories/                   # Data access (Prisma)
 ├── routes/                         # Route definitions
 ├── dtos/                           # Zod request schemas
-├── middlewares/                    # validate, error-handler, requireUserId, route-not-found
+├── mailer/                         # Email templates/senders (e.g. booking confirmation)
+├── middlewares/                    # validate, validateQuery, error-handler, requireUserId, route-not-found
 ├── temporal/
 │   ├── client.ts                   # Starts workflows from the API process
 │   ├── worker.ts                   # Temporal worker entrypoint
 │   ├── activities/                 # Activity implementations
-│   └── workflows/                  # Workflow definitions (e.g. slot regeneration)
+│   └── workflows/                  # Workflow definitions (slot regeneration, booking confirmation email)
 └── utils/                          # ApiError, ApiResponse helpers
 prisma/
 └── schema.prisma                   # User, EventType, AvailabilityRule,
                                      # AvailabilityException, Slot, Booking models
-docker-compose.yml                  # Temporal server + Temporal UI
+docker-compose.yml                  # Temporal server + Temporal UI + MailHog
 ```
 
 The codebase follows a layered architecture: **routes → controllers → services → repositories**.
@@ -75,7 +78,15 @@ The codebase follows a layered architecture: **routes → controllers → servic
    TEMPORAL_NAMESPACE=default
    TEMPORAL_TASK_QUEUE=calendly-tasks
    TEMPORAL_ENABLED=true
+
+   SMTP_HOST=localhost
+   SMTP_PORT=1025
+   SMTP_USER=
+   SMTP_PASS=
+   EMAIL_FROM="Calendly <noreply@example.com>"
    ```
+
+   Leave `SMTP_USER`/`SMTP_PASS` empty for MailHog (no auth needed locally); set both to enable SMTP auth against a real provider.
 
 3. Generate the Prisma client and apply the schema:
 
@@ -84,7 +95,7 @@ The codebase follows a layered architecture: **routes → controllers → servic
    pnpm prisma:migrate
    ```
 
-4. Start Temporal (server + UI) via Docker Compose:
+4. Start Temporal and MailHog via Docker Compose:
 
    ```bash
    docker compose up -d
@@ -92,6 +103,8 @@ The codebase follows a layered architecture: **routes → controllers → servic
 
    - Temporal server: `localhost:7233`
    - Temporal Web UI: [http://localhost:8080](http://localhost:8080)
+   - MailHog SMTP: `localhost:1025`
+   - MailHog Web UI (view sent emails): [http://localhost:8025](http://localhost:8025)
 
 ## Running
 
@@ -136,6 +149,7 @@ All authenticated routes require an `x-host-id` header (numeric user/host ID).
 | PATCH  | `/api/v1/availability/exceptions/:id`     | Update an availability exception      | `x-host-id`    |
 | DELETE | `/api/v1/availability/exceptions/:id`     | Delete an availability exception      | `x-host-id`    |
 | POST   | `/api/v1/bookings`                        | Book an available slot                | `x-host-id`    |
+| GET    | `/api/v1/bookings`                        | List a host's bookings (filters: `status`, `from`, `to`) | `x-host-id` |
 
 ### Example
 
@@ -158,6 +172,9 @@ curl -X POST http://localhost:3000/api/v1/bookings \
   -H "Content-Type: application/json" \
   -H "x-host-id: 1" \
   -d '{"slotId":"<slot-id>","inviteeEmail":"invitee@example.com","inviteeName":"Jane Doe"}'
+
+curl "http://localhost:3000/api/v1/bookings?status=CONFIRMED&from=2026-08-01&to=2026-08-31" \
+  -H "x-host-id: 1"
 ```
 
 ## Data Model
@@ -178,15 +195,15 @@ Core entities (see `prisma/schema.prisma` for full detail):
 - `createBookingService` — **optimistic**: reads the slot, then commits the booking via a conditional `updateMany` (`WHERE id = ... AND status = 'AVAILABLE'`); if another request booked it first, the update matches zero rows and the request fails fast with `400`.
 - `createBookingServiceWithPessimisticLock` — **pessimistic**: opens with `SELECT ... FOR UPDATE` to lock the slot row for the transaction's duration, so a concurrent booking attempt on the same slot blocks until this one commits or rolls back, then sees the up-to-date status. Not yet wired to a route.
 
-Only `createBookingService` is exposed via `POST /api/v1/bookings` today.
+Only `createBookingService` is exposed via `POST /api/v1/bookings` today. After either path commits, `postBookingActions` fires two Temporal workflows for the affected host/booking (see below), and the response is shaped by the shared `formatBookingResponse` helper. `listHostBooking` (backing `GET /api/v1/bookings`) supports filtering by `status`, and by `from`/`to` — matched against the *slot's* start time, not the booking's `createdAt`.
 
 ## Temporal Workflows
 
-Slots are (re)generated asynchronously via a Temporal workflow rather than inline in the request path:
+Two workflows run asynchronously rather than inline in the request path, both started from [src/temporal/client.ts](src/temporal/client.ts) via `client.workflow.start(...)` — never call a workflow function directly from service code, since it relies on `proxyActivities` and only works inside the Temporal worker sandbox:
 
-- `regenerateHostSlotsWorkflow` ([src/temporal/workflows/slot-generation.workflow.ts](src/temporal/workflows/slot-generation.workflow.ts)) calls the `regenerateHostSlotsActivity` activity to rebuild a host's slots (e.g. after availability rules/exceptions change).
-- The API process ([src/temporal/client.ts](src/temporal/client.ts)) starts workflows on the `TEMPORAL_TASK_QUEUE` queue; an independent worker process ([src/temporal/worker.ts](src/temporal/worker.ts)) executes them.
-- Run `pnpm dev:worker` alongside `pnpm dev` for workflows to be picked up, and inspect runs in the Temporal UI at `http://localhost:8080`.
+- `regenerateHostSlotsWorkflow` ([src/temporal/workflows/slot-generation.workflow.ts](src/temporal/workflows/slot-generation.workflow.ts)) calls the `regenerateHostSlotsActivity` activity to rebuild a host's slots (e.g. after availability rules/exceptions change, or after a booking — scoped to just that slot's date so buffer-adjacent slots get correctly blocked).
+- `sendBookingConfirmationEmailWorkflow` ([src/temporal/workflows/booking-notification.workflow.ts](src/temporal/workflows/booking-notification.workflow.ts)) calls `sendBookingConfirmationEmailActivity`, which sends the invitee a confirmation email via [src/mailer/booking.mailer.ts](src/mailer/booking.mailer.ts).
+- An independent worker process ([src/temporal/worker.ts](src/temporal/worker.ts)) executes both. Run `pnpm dev:worker` alongside `pnpm dev` for workflows to be picked up, inspect runs in the Temporal UI at `http://localhost:8080`, and check sent emails in the MailHog UI at `http://localhost:8025`.
 
 ## License
 
