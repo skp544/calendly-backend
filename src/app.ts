@@ -3,6 +3,7 @@ import userRouter from "./routes/user.routes.js";
 import eventTypeRouter from "./routes/event-type.routes.js";
 import publicEventTypeRouter from "./routes/public-event-type.routes.js";
 import availabilityRouter from "./routes/availability.routes.js";
+import bookingRouter from "./routes/booking.routes.js";
 import { errorHandler } from "./middlewares/error-handler.js";
 import { routeNotFound } from "./middlewares/route-not-found.js";
 
@@ -29,6 +30,7 @@ app.use("/api/v1/users", userRouter);
 app.use("/api/v1/event-types", eventTypeRouter);
 app.use("/api/v1/public/event-types", publicEventTypeRouter);
 app.use("/api/v1/availability", availabilityRouter);
+app.use("/api/v1/bookings", bookingRouter);
 
 app.use(routeNotFound);
 app.use(errorHandler);

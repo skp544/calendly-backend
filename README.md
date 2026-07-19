@@ -135,6 +135,7 @@ All authenticated routes require an `x-host-id` header (numeric user/host ID).
 | POST   | `/api/v1/availability/exceptions`         | Create an availability exception      | `x-host-id`    |
 | PATCH  | `/api/v1/availability/exceptions/:id`     | Update an availability exception      | `x-host-id`    |
 | DELETE | `/api/v1/availability/exceptions/:id`     | Delete an availability exception      | `x-host-id`    |
+| POST   | `/api/v1/bookings`                        | Book an available slot                | `x-host-id`    |
 
 ### Example
 
@@ -152,6 +153,11 @@ curl -X POST http://localhost:3000/api/v1/availability/rules \
   -H "Content-Type: application/json" \
   -H "x-host-id: 1" \
   -d '{"weekday":1,"startTime":"09:00","endTime":"17:00"}'
+
+curl -X POST http://localhost:3000/api/v1/bookings \
+  -H "Content-Type: application/json" \
+  -H "x-host-id: 1" \
+  -d '{"slotId":"<slot-id>","inviteeEmail":"invitee@example.com","inviteeName":"Jane Doe"}'
 ```
 
 ## Data Model
@@ -164,6 +170,15 @@ Core entities (see `prisma/schema.prisma` for full detail):
 - **AvailabilityException** — one-off override for a specific date (`BLOCK_FULL_DAY`, `BLOCK_PARTIAL`, `ADD_AVAILABLE_WINDOW`).
 - **Slot** — a concrete bookable time window generated from rules/exceptions for a host + event type.
 - **Booking** — an invitee's reservation of a slot.
+
+## Booking Concurrency Control
+
+[src/services/booking.service.ts](src/services/booking.service.ts) implements slot booking two ways, both inside a `prisma.$transaction`, with Prisma calls factored into [src/repositories/booking.repository.ts](src/repositories/booking.repository.ts):
+
+- `createBookingService` — **optimistic**: reads the slot, then commits the booking via a conditional `updateMany` (`WHERE id = ... AND status = 'AVAILABLE'`); if another request booked it first, the update matches zero rows and the request fails fast with `400`.
+- `createBookingServiceWithPessimisticLock` — **pessimistic**: opens with `SELECT ... FOR UPDATE` to lock the slot row for the transaction's duration, so a concurrent booking attempt on the same slot blocks until this one commits or rolls back, then sees the up-to-date status. Not yet wired to a route.
+
+Only `createBookingService` is exposed via `POST /api/v1/bookings` today.
 
 ## Temporal Workflows
 
