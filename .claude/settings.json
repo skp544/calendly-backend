@@ -8,7 +8,10 @@
       "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3000/api/v1/bookings?status=CONFIRMED&from=2026-07-20&to=2026-07-20\" -H \"x-host-id: 6\")",
       "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3000/api/v1/bookings?status=BOGUS\" -H \"x-host-id: 6\")",
       "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3000/api/v1/bookings?from=07-20-2026\" -H \"x-host-id: 6\")",
-      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3000/api/v1/bookings?to=2026/07/20\" -H \"x-host-id: 6\")"
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3000/api/v1/bookings?to=2026/07/20\" -H \"x-host-id: 6\")",
+      "Bash(curl -s -o /dev/null -w \"health=%{http_code}\\\\n\" http://localhost:3000/health)",
+      "Bash(node \"C:\\\\Users\\\\skp54\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--self-practice-calendly-backend\\\\5e85650c-196c-48b4-ac3a-9ad87e6ef2d9\\\\scratchpad\\\\query.cjs\" 'select id, status, \"startAt\"::text as s from slots where \"hostId\"=6 and \"startAt\"::date='\"'\"'2026-07-21'\"'\"' order by \"startAt\"')",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/v1/bookings -H \"Content-Type: application/json\" -H \"x-host-id: 6\" -d '{\"slotId\":\"cmrs0jkko0004ogt4kdiwjste\",\"inviteeEmail\":\"regen-check@example.com\",\"inviteeName\":\"Regen Check\"}')"
     ]
   }
 }
