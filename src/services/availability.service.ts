@@ -49,7 +49,13 @@ export async function removeRuleService(userId: number, ruleId: number) {
     throw forbidden("You're not authorized to delete this availability rule");
   }
 
-  return removeRule(ruleId);
+  const removedRule = await removeRule(ruleId);
+
+  await startRegenerateHostSlotWorkflow({
+    hostId: userId,
+  });
+
+  return removedRule;
 }
 
 export async function updateRuleService(

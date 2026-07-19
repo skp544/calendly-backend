@@ -23,9 +23,14 @@ async function startWorkflow(
       ),
     ]);
 
+    // Only one regeneration should ever be in flight per workflowId at a time.
+    // If a mutation lands while a previous regeneration for the same host is
+    // still running, terminate it and start fresh so the latest state always
+    // wins instead of the start silently failing or two runs racing on writes.
     const handle = await client.workflow.start(workflowName, {
       taskQueue: TEMPORAL_TASK_QUEUE,
       workflowId,
+      workflowIdConflictPolicy: "TERMINATE_EXISTING",
       args,
     });
 
