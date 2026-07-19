@@ -67,7 +67,7 @@ export async function updateRuleService(
     throw forbidden("You're not authorized to update this availability rule");
   }
 
-  const updatedRule = updateRule(ruleId, data);
+  const updatedRule = await updateRule(ruleId, data);
 
   await startRegenerateHostSlotWorkflow({
     hostId: userId,
@@ -110,7 +110,7 @@ export async function removeExceptionService(
     );
   }
 
-  const removedException = removeException(exceptionId);
+  const removedException = await removeException(exceptionId);
   await startRegenerateHostSlotWorkflow({
     hostId: userId,
   });
@@ -135,7 +135,7 @@ export async function updateExceptionService(
     );
   }
 
-  const updatedException = updateException(exceptionId, data);
+  const updatedException = await updateException(exceptionId, data);
 
   await startRegenerateHostSlotWorkflow({
     hostId: userId,
