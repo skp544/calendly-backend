@@ -11,3 +11,15 @@ export const createBookSchema = z.object({
 });
 
 export type CreateBookingDto = z.infer<typeof createBookSchema>;
+
+const dateString = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format");
+
+export const listBookingsQuerySchema = z.object({
+  status: z.enum(["PENDING", "CONFIRMED", "CANCELLED"]).optional(),
+  from: dateString.optional(),
+  to: dateString.optional(),
+});
+
+export type ListBookingsQueryDto = z.infer<typeof listBookingsQuerySchema>;

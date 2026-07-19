@@ -93,6 +93,13 @@ export async function findBookingsByHost(
     },
     include: {
       slot: true,
+      eventType: {
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+        },
+      },
     },
     orderBy: {
       createdAt: "desc",

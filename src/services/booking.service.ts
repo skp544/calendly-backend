@@ -147,5 +147,6 @@ export async function listHostBooking(
     cancelledAt: booking.cancelledAt,
     startAt: booking.slot.startAt.toISOString(),
     endAt: booking.slot.endAt.toISOString(),
+    eventType: booking.eventType,
   }));
 }
