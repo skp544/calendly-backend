@@ -14,3 +14,11 @@ export const TEMPORAL_TASK_QUEUE =
   process.env.TEMPORAL_TASK_QUEUE || "calendly-tasks";
 
 export const TEMPORAL_ENABLED = process.env.TEMPORAL_ENABLED === "true"; //Todo: write a function which can determine if temporal is enabled based on some health checks
+
+export const SMTP_HOST = process.env.SMTP_HOST || "localhost";
+export const SMTP_PORT = process.env.SMTP_PORT
+  ? Number(process.env.SMTP_PORT)
+  : undefined;
+export const SMTP_USER = process.env.SMTP_USER;
+export const SMTP_PASS = process.env.SMTP_PASS;
+export const EMAIL_FROM = process.env.EMAIL_FROM;
