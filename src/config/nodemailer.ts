@@ -18,10 +18,12 @@ function getTransporter() {
     host: SMTP_HOST,
     port: SMTP_PORT,
     secure: false,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
+    // Omit auth entirely when no credentials are configured (e.g. MailHog in
+    // dev) — passing an auth object with empty strings makes nodemailer
+    // attempt PLAIN auth and fail with "Missing credentials".
+    ...(SMTP_USER && SMTP_PASS
+      ? { auth: { user: SMTP_USER, pass: SMTP_PASS } }
+      : {}),
   });
 
   return transporter;

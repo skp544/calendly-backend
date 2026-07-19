@@ -9,7 +9,30 @@ import {
   markSlotAsBooked,
   markSlotAsBookedIfAvailable,
 } from "../repositories/booking.repository.js";
-import { startRegenerateHostSlotWorkflow } from "../temporal/client.js";
+import {
+  startRegenerateHostSlotWorkflow,
+  startSendBookingConfirmationEmailWorkflow,
+} from "../temporal/client.js";
+
+interface BookingWithSlot {
+  id: number;
+  status: string;
+  slot: {
+    startAt: Date;
+    endAt: Date;
+  };
+}
+
+function formatBookingResponse(booking: BookingWithSlot) {
+  return {
+    booking: {
+      id: booking.id,
+      status: booking.status,
+      startAt: booking.slot.startAt.toISOString(),
+      endAt: booking.slot.endAt.toISOString(),
+    },
+  };
+}
 
 async function triggerSlotRegeneration(hostId: number, slotStartAt: Date) {
   const date = slotStartAt.toISOString().split("T")[0];
@@ -26,6 +49,12 @@ async function triggerSlotRegeneration(hostId: number, slotStartAt: Date) {
     "on date:",
     date,
   );
+}
+
+async function postBookingActions(hostId: number, booking: BookingWithSlot) {
+  await triggerSlotRegeneration(hostId, booking.slot.startAt);
+
+  await startSendBookingConfirmationEmailWorkflow(booking.id);
 }
 
 export async function createBookingService(
@@ -63,15 +92,9 @@ export async function createBookingService(
     });
   });
 
-  await triggerSlotRegeneration(Number(userId), booking.slot.startAt);
-  return {
-    booking: {
-      id: booking.id,
-      status: booking.status,
-      startAt: booking.slot.startAt.toISOString(),
-      endAt: booking.slot.endAt.toISOString(),
-    },
-  };
+  await postBookingActions(Number(userId), booking);
+
+  return formatBookingResponse(booking);
 }
 
 export async function createBookingServiceWithPessimisticLock(
@@ -108,16 +131,9 @@ export async function createBookingServiceWithPessimisticLock(
     });
   });
 
-  await triggerSlotRegeneration(Number(userId), booking.slot.startAt);
+  await postBookingActions(Number(userId), booking);
 
-  return {
-    booking: {
-      id: booking.id,
-      status: booking.status,
-      startAt: booking.slot.startAt.toISOString(),
-      endAt: booking.slot.endAt.toISOString(),
-    },
-  };
+  return formatBookingResponse(booking);
 }
 
 export interface ListHostBookingFilters {

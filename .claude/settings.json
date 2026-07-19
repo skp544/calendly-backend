@@ -11,7 +11,12 @@
       "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"http://localhost:3000/api/v1/bookings?to=2026/07/20\" -H \"x-host-id: 6\")",
       "Bash(curl -s -o /dev/null -w \"health=%{http_code}\\\\n\" http://localhost:3000/health)",
       "Bash(node \"C:\\\\Users\\\\skp54\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--self-practice-calendly-backend\\\\5e85650c-196c-48b4-ac3a-9ad87e6ef2d9\\\\scratchpad\\\\query.cjs\" 'select id, status, \"startAt\"::text as s from slots where \"hostId\"=6 and \"startAt\"::date='\"'\"'2026-07-21'\"'\"' order by \"startAt\"')",
-      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/v1/bookings -H \"Content-Type: application/json\" -H \"x-host-id: 6\" -d '{\"slotId\":\"cmrs0jkko0004ogt4kdiwjste\",\"inviteeEmail\":\"regen-check@example.com\",\"inviteeName\":\"Regen Check\"}')"
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/v1/bookings -H \"Content-Type: application/json\" -H \"x-host-id: 6\" -d '{\"slotId\":\"cmrs0jkko0004ogt4kdiwjste\",\"inviteeEmail\":\"regen-check@example.com\",\"inviteeName\":\"Regen Check\"}')",
+      "Bash(node \"C:\\\\Users\\\\skp54\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--self-practice-calendly-backend\\\\5e85650c-196c-48b4-ac3a-9ad87e6ef2d9\\\\scratchpad\\\\query.cjs\" 'select id, status, \"startAt\"::text as s from slots where \"hostId\"=6 and status='\"'\"'AVAILABLE'\"'\"' order by \"startAt\" limit 1')",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/v1/bookings -H \"Content-Type: application/json\" -H \"x-host-id: 6\" -d '{\"slotId\":\"cmrs0jkks0006ogt465s4dirb\",\"inviteeEmail\":\"email-test@example.com\",\"inviteeName\":\"Email Test\"}')",
+      "Bash(curl -s http://localhost:8025/api/v2/messages)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\('total:',j.total\\);j.items.forEach\\(m=>console.log\\(m.Content.Headers.To, '|', m.Content.Headers.Subject\\)\\);}\\)\")",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/v1/bookings -H \"Content-Type: application/json\" -H \"x-host-id: 6\" -d '{\"slotId\":\"cmrs0jkkv0008ogt4fp837n8l\",\"inviteeEmail\":\"email-test-2@example.com\",\"inviteeName\":\"Email Test Two\"}')"
     ]
   }
 }
