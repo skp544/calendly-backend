@@ -1,3 +1,4 @@
+import { prisma } from "../config/database.js";
 import { Prisma, Slot } from "../../generated/prisma/client.js";
 
 type Tx = Prisma.TransactionClient;
@@ -61,6 +62,40 @@ export async function createBookingRecord(
     },
     include: {
       slot: true,
+    },
+  });
+}
+
+export interface FindBookingsByHostFilters {
+  status?: string;
+  from?: Date;
+  to?: Date;
+}
+
+export async function findBookingsByHost(
+  hostId: number,
+  filters: FindBookingsByHostFilters = {},
+) {
+  return prisma.booking.findMany({
+    where: {
+      hostId,
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.from || filters.to
+        ? {
+            slot: {
+              startAt: {
+                ...(filters.from ? { gte: filters.from } : {}),
+                ...(filters.to ? { lte: filters.to } : {}),
+              },
+            },
+          }
+        : {}),
+    },
+    include: {
+      slot: true,
+    },
+    orderBy: {
+      createdAt: "desc",
     },
   });
 }

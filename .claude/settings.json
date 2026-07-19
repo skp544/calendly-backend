@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node \"C:\\\\Users\\\\skp54\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--self-practice-calendly-backend\\\\5e85650c-196c-48b4-ac3a-9ad87e6ef2d9\\\\scratchpad\\\\query.cjs\" 'select \"startAt\"::date as d, status, count\\(*\\) from slots where \"hostId\"=6 group by d, status order by d')",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/v1/bookings -H \"Content-Type: application/json\" -H \"x-host-id: 6\" -d '{\"slotId\":\"cmrs0jkka0000ogt4gos7jgye\",\"inviteeEmail\":\"another@example.com\",\"inviteeName\":\"Another\"}')"
+    ]
+  }
+}

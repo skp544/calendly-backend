@@ -3,11 +3,30 @@ import { CreateBookingDto } from "../dtos/booking.dto.js";
 import { badRequest, notFound } from "../utils/api-error.js";
 import {
   createBookingRecord,
+  findBookingsByHost,
   findSlotById,
   findSlotByIdForUpdate,
   markSlotAsBooked,
   markSlotAsBookedIfAvailable,
 } from "../repositories/booking.repository.js";
+import { startRegenerateHostSlotWorkflow } from "../temporal/client.js";
+
+async function triggerSlotRegeneration(hostId: number, slotStartAt: Date) {
+  const date = slotStartAt.toISOString().split("T")[0];
+
+  await startRegenerateHostSlotWorkflow({
+    hostId,
+    from: date,
+    to: date,
+  });
+
+  console.log(
+    "[booking] Triggered slot regeneration workflow for hostId:",
+    hostId,
+    "on date:",
+    date,
+  );
+}
 
 export async function createBookingService(
   userId: string,
@@ -44,6 +63,7 @@ export async function createBookingService(
     });
   });
 
+  await triggerSlotRegeneration(Number(userId), booking.slot.startAt);
   return {
     booking: {
       id: booking.id,
@@ -88,6 +108,8 @@ export async function createBookingServiceWithPessimisticLock(
     });
   });
 
+  await triggerSlotRegeneration(Number(userId), booking.slot.startAt);
+
   return {
     booking: {
       id: booking.id,
@@ -96,4 +118,34 @@ export async function createBookingServiceWithPessimisticLock(
       endAt: booking.slot.endAt.toISOString(),
     },
   };
+}
+
+export interface ListHostBookingFilters {
+  status?: string;
+  from?: string; // yyyy-mm-dd
+  to?: string; // yyyy-mm-dd
+}
+
+export async function listHostBooking(
+  hostId: number,
+  filters: ListHostBookingFilters = {},
+) {
+  const bookings = await findBookingsByHost(hostId, {
+    status: filters.status,
+    from: filters.from ? new Date(`${filters.from}T00:00:00.000Z`) : undefined,
+    // A "yyyy-mm-dd" `to` means "through the end of that day" — parsing it
+    // bare would land on UTC midnight and exclude every slot on that date.
+    to: filters.to ? new Date(`${filters.to}T23:59:59.999Z`) : undefined,
+  });
+
+  return bookings.map((booking) => ({
+    id: booking.id,
+    status: booking.status,
+    inviteeName: booking.inviteeName,
+    inviteeEmail: booking.inviteeEmail,
+    inviteeNote: booking.inviteeNote,
+    cancelledAt: booking.cancelledAt,
+    startAt: booking.slot.startAt.toISOString(),
+    endAt: booking.slot.endAt.toISOString(),
+  }));
 }
