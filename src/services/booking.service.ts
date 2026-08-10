@@ -2,7 +2,9 @@ import { prisma } from "../config/database.js";
 import { CreateBookingDto } from "../dtos/booking.dto.js";
 import { badRequest, notFound } from "../utils/api-error.js";
 import {
+  cancelBookingRecord,
   createBookingRecord,
+  findBookingById,
   findBookingsByHost,
   findSlotById,
   findSlotByIdForUpdate,
@@ -10,6 +12,7 @@ import {
   markSlotAsBookedIfAvailable,
 } from "../repositories/booking.repository.js";
 import {
+  startCancelBookingWorkflow,
   startConfirmBookingWorkflow,
   startRegenerateHostSlotWorkflow,
 } from "../temporal/client.js";
@@ -134,6 +137,28 @@ export async function createBookingServiceWithPessimisticLock(
   await postBookingActions(Number(userId), booking);
 
   return formatBookingResponse(booking);
+}
+
+export async function cancelBookingService(hostId: number, bookingId: number) {
+  const booking = await findBookingById(bookingId);
+
+  if (!booking || booking.hostId !== hostId) {
+    throw notFound("Booking not found!");
+  }
+
+  if (booking.status === "CANCELLED") {
+    throw badRequest("Booking is already cancelled");
+  }
+
+  const cancelled = await cancelBookingRecord(bookingId, booking.slotId);
+
+  // Neighboring slots may have been BLOCKED by this booking's buffer window —
+  // regenerate so they become bookable again now that it's cancelled.
+  await triggerSlotRegeneration(hostId, cancelled.slot.startAt);
+
+  await startCancelBookingWorkflow(bookingId);
+
+  return formatBookingResponse(cancelled);
 }
 
 export interface ListHostBookingFilters {

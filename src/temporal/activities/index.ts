@@ -1,4 +1,7 @@
-import { sendBookingConfirmationEmail } from "../../mailer/booking.mailer.js";
+import {
+  sendBookingCancellationEmail,
+  sendBookingConfirmationEmail,
+} from "../../mailer/booking.mailer.js";
 import {
   RegenerateHostsSlotInput,
   regenerateHostsSlot as runSlotGeneration,
@@ -16,6 +19,10 @@ export async function regenerateHostSlotsActivity(
 
 export async function sendBookingConfirmationEmailActivity(bookingId: number) {
   await sendBookingConfirmationEmail(bookingId);
+}
+
+export async function sendBookingCancellationEmailActivity(bookingId: number) {
+  await sendBookingCancellationEmail(bookingId);
 }
 
 export async function createGoogleCalenderEventActivity(bookingId: number) {

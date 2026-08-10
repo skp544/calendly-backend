@@ -124,6 +124,34 @@ export async function updateBookingCalendarDetails(
   });
 }
 
+export async function cancelBookingRecord(bookingId: number, slotId: string) {
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.update({
+      where: {
+        id: bookingId,
+      },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: new Date(),
+      },
+      include: {
+        slot: true,
+      },
+    });
+
+    await tx.slot.update({
+      where: {
+        id: slotId,
+      },
+      data: {
+        status: "AVAILABLE",
+      },
+    });
+
+    return booking;
+  });
+}
+
 export async function findBookingById(bookingId: number) {
   return prisma.booking.findUnique({
     where: {

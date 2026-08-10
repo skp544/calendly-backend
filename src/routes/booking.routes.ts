@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  cancelBooking,
   createBooking,
   listBookings,
 } from "../controllers/booking.controller.js";
@@ -17,5 +18,7 @@ bookingRouter.use(requireUserId);
 bookingRouter.get("/", validateQuery(listBookingsQuerySchema), listBookings);
 
 bookingRouter.post("/", validate(createBookSchema), createBooking);
+
+bookingRouter.post("/:id/cancel", cancelBooking);
 
 export default bookingRouter;

@@ -61,6 +61,14 @@ export async function startConfirmBookingWorkflow(bookingId: number) {
   );
 }
 
+export async function startCancelBookingWorkflow(bookingId: number) {
+  return startWorkflow(
+    "cancelBookingWorkflow",
+    `cancel-booking-${bookingId}`,
+    [bookingId],
+  );
+}
+
 // Not called from the booking flow — confirmBookingWorkflow already covers
 // that. Kept for a future manual/admin re-sync trigger.
 export async function startCreateGoogleCalenderEventWorkflow(
