@@ -1,5 +1,5 @@
 import { TEMPORAL_ENABLED, TEMPORAL_TASK_QUEUE } from "../config/env.js";
-import { getTemporalClient } from "../config/temporal.js";
+import { getTemporalClient, isTemporalHealthy } from "../config/temporal.js";
 import { RegenerateHostsSlotInput } from "../services/slot.service.js";
 
 async function startWorkflow(
@@ -12,16 +12,13 @@ async function startWorkflow(
     return null;
   }
 
+  if (!(await isTemporalHealthy())) {
+    console.warn("[temporal] Temporal health check failed, skipping workflow start");
+    return null;
+  }
+
   try {
-    const client = await Promise.race([
-      getTemporalClient(),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Temporal client connection timeout")),
-          5000,
-        ),
-      ),
-    ]);
+    const client = await getTemporalClient();
 
     // Only one regeneration should ever be in flight per workflowId at a time.
     // If a mutation lands while a previous regeneration for the same host is

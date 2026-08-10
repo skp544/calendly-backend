@@ -21,3 +21,27 @@ export async function disconnectTemporal() {
     client = null;
   }
 }
+
+// Live check, not a cached/memoized one — `Connection.ensureConnected`
+// memoizes its result after the first call, so it can't tell us the server
+// went down later. Calling getSystemInfo directly makes a fresh gRPC round
+// trip every time.
+export async function isTemporalHealthy(timeoutMs = 3000): Promise<boolean> {
+  try {
+    const connectedClient = await Promise.race([
+      getTemporalClient(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Temporal health check timed out")),
+          timeoutMs,
+        ),
+      ),
+    ]);
+
+    await connectedClient.connection.workflowService.getSystemInfo({});
+    return true;
+  } catch (err) {
+    console.error("[temporal] Health check failed:", err);
+    return false;
+  }
+}

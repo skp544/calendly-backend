@@ -13,7 +13,11 @@ export const TEMPORAL_NAMESPACE = process.env.TEMPORAL_NAMESPACE || "default";
 export const TEMPORAL_TASK_QUEUE =
   process.env.TEMPORAL_TASK_QUEUE || "calendly-tasks";
 
-export const TEMPORAL_ENABLED = process.env.TEMPORAL_ENABLED === "true"; //Todo: write a function which can determine if temporal is enabled based on some health checks
+// Static on/off switch for opting out of Temporal entirely (e.g. local dev
+// without docker-compose up). Whether the server is actually reachable
+// right now is checked separately via isTemporalHealthy() in
+// src/config/temporal.ts.
+export const TEMPORAL_ENABLED = process.env.TEMPORAL_ENABLED === "true";
 
 export const SMTP_HOST = process.env.SMTP_HOST || "localhost";
 export const SMTP_PORT = process.env.SMTP_PORT
