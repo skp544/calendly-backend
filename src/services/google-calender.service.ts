@@ -102,6 +102,8 @@ export async function exchangeSetupCode(code: string) {
 
   const integration: GoogleIntegration = {
     refreshToken: tokens.refresh_token,
+    // GOOGLE_SENDER_EMAIL is only a fallback if userinfo doesn't return an
+    // email — the real source of truth is Redis, not this env var.
     email: data.email ?? GOOGLE_SENDER_EMAIL,
   };
 

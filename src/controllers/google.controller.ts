@@ -15,7 +15,9 @@ export const setupGoogleCallback = async (req: Request, res: Response) => {
 
   if (!code) throw badRequest("No Code provided");
 
-  const { refreshToken, email } = await exchangeSetupCode(code);
+  // refreshToken is persisted in Redis inside exchangeSetupCode — never echo
+  // it back over HTTP.
+  const { email } = await exchangeSetupCode(code);
 
-  sendSuccess(res, { refreshToken, email });
+  sendSuccess(res, { email });
 };

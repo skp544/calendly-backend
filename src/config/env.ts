@@ -30,8 +30,6 @@ export const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "";
 export const GOOGLE_SENDER_EMAIL =
   process.env.GOOGLE_SENDER_EMAIL || "info@example.com";
 
-export const USER_EMAIL = process.env.USER_EMAIL || "";
-
 export const GOOGLE_CALENDER_ID = process.env.GOOGLE_CALENDER_ID || "primary";
 
 export const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";

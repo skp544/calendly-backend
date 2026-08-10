@@ -233,7 +233,7 @@ Booking confirmation can optionally create a Google Calendar event (with a Meet 
 2. On the OAuth consent screen's **Data Access** page, add the non-sensitive `.../auth/userinfo.email` scope in addition to the calendar scopes — required for the callback to resolve the authorizing account's email.
 3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env`, and make sure Redis is running (`docker compose up -d redis`).
 4. `GET /api/v1/integrations/google/setup` returns `{ data: { url } }` — visit that URL and grant consent.
-5. Google redirects to `/api/v1/integrations/google/callback?code=...`; `exchangeSetupCode` exchanges the code for tokens, stores `{ refreshToken, email }` in Redis under the `google:integration` key via [src/config/redis.ts](src/config/redis.ts), and returns the same payload in the response.
+5. Google redirects to `/api/v1/integrations/google/callback?code=...`; `exchangeSetupCode` exchanges the code for tokens and stores `{ refreshToken, email }` in Redis under the `google:integration` key via [src/config/redis.ts](src/config/redis.ts). The response only echoes back `{ email }` — the refresh token stays server-side.
 6. From here on, `getGoogleCalenderClient()` reads the refresh token back out of Redis to authenticate every calendar API call — no manual `.env` copy-paste needed. Re-running steps 4–5 overwrites the stored token (e.g. if it's revoked).
 
 Until setup is completed (or if `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` are unset), `isGoogleCalendarReady()` returns `false` and the calendar activity is skipped entirely — bookings, and their confirmation emails, still succeed without it.
