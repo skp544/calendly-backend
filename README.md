@@ -67,7 +67,7 @@ The codebase follows a layered architecture: **routes → controllers → servic
    pnpm install
    ```
 
-2. Create a `.env` file in the project root:
+2. Create a `.env` file in the project root (copy [.env.example](.env.example) as a starting point — real secrets like `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are left blank there):
 
    ```env
    PORT=3000
@@ -135,7 +135,7 @@ Start the Temporal worker in a separate terminal (required for slot-regeneration
 pnpm dev:worker
 ```
 
-The API runs at `http://localhost:3000` (or the `PORT` you configured). If `TEMPORAL_ENABLED` is not `"true"`, workflow-triggering code paths are skipped with a warning instead of failing.
+The API runs at `http://localhost:3000` (or the `PORT` you configured). Workflow-triggering code paths are skipped with a warning instead of failing whenever either: `TEMPORAL_ENABLED` is not `"true"` (a static opt-out), or `isTemporalHealthy()` ([src/config/temporal.ts](src/config/temporal.ts)) can't reach the Temporal server — a live `getSystemInfo` check run before every workflow start, since a server that's down mid-session wouldn't be caught by the static flag alone.
 
 ## API Endpoints
 
@@ -165,6 +165,7 @@ All authenticated routes require an `x-host-id` header (numeric user/host ID).
 | DELETE | `/api/v1/availability/exceptions/:id`     | Delete an availability exception      | `x-host-id`    |
 | POST   | `/api/v1/bookings`                        | Book an available slot                | `x-host-id`    |
 | GET    | `/api/v1/bookings`                        | List a host's bookings (filters: `status`, `from`, `to`) | `x-host-id` |
+| POST   | `/api/v1/bookings/:id/cancel`             | Cancel a booking                      | `x-host-id`    |
 | GET    | `/api/v1/integrations/google/setup`       | Returns the Google OAuth2 consent URL | – |
 | GET    | `/api/v1/integrations/google/callback`    | OAuth2 redirect target — exchanges `code` for a refresh token | – |
 
@@ -194,13 +195,16 @@ curl -X POST http://localhost:3000/api/v1/bookings \
 
 curl "http://localhost:3000/api/v1/bookings?status=CONFIRMED&from=2026-08-01&to=2026-08-31" \
   -H "x-host-id: 1"
+
+curl -X POST http://localhost:3000/api/v1/bookings/1/cancel \
+  -H "x-host-id: 1"
 ```
 
 ## Data Model
 
 Core entities (see `prisma/schema.prisma` for full detail):
 
-- **User** — a host with a unique slug and timezone.
+- **User** — a host with a unique slug and timezone. `createUserService` ([src/services/user.service.ts](src/services/user.service.ts)) derives the slug from `name` when one isn't supplied, auto-disambiguating collisions with a numeric suffix (`jane`, `jane-2`, `jane-3`, ...); an explicitly-supplied slug that's already taken is rejected with a `409` instead, since that's a deliberate choice rather than a generated default.
 - **EventType** — a bookable meeting type owned by a host (duration, buffers, location, slug).
 - **AvailabilityRule** — recurring weekly availability window (`weekday` + `startTime`/`endTime`).
 - **AvailabilityException** — one-off override for a specific date (`BLOCK_FULL_DAY`, `BLOCK_PARTIAL`, `ADD_AVAILABLE_WINDOW`).
@@ -216,12 +220,15 @@ Core entities (see `prisma/schema.prisma` for full detail):
 
 Only `createBookingService` is exposed via `POST /api/v1/bookings` today. After either path commits, `postBookingActions` fires the Temporal workflows for the affected host/booking (see below), and the response is shaped by the shared `formatBookingResponse` helper. `listHostBooking` (backing `GET /api/v1/bookings`) supports filtering by `status`, and by `from`/`to` — matched against the *slot's* start time, not the booking's `createdAt`.
 
+`cancelBookingService` (backing `POST /api/v1/bookings/:id/cancel`) validates the booking belongs to the requesting host and isn't already cancelled, then `cancelBookingRecord` transactionally marks it `CANCELLED` (with `cancelledAt`) and flips its slot back to `AVAILABLE`. It then re-triggers slot regeneration for that date — cancelling doesn't just free the one slot; any neighboring slots that were `BLOCKED` by this booking's buffer window need to be re-evaluated and freed too — followed by `startCancelBookingWorkflow` to send the cancellation email.
+
 ## Temporal Workflows
 
 Workflows run asynchronously rather than inline in the request path, all started from [src/temporal/client.ts](src/temporal/client.ts) via `client.workflow.start(...)` — never call a workflow function directly from service code, since it relies on `proxyActivities` and only works inside the Temporal worker sandbox:
 
 - `regenerateHostSlotsWorkflow` ([src/temporal/workflows/slot-generation.workflow.ts](src/temporal/workflows/slot-generation.workflow.ts)) calls the `regenerateHostSlotsActivity` activity to rebuild a host's slots (e.g. after availability rules/exceptions change, or after a booking — scoped to just that slot's date so buffer-adjacent slots get correctly blocked).
 - `confirmBookingWorkflow` ([src/temporal/workflows/booking-notification.workflow.ts](src/temporal/workflows/booking-notification.workflow.ts)) runs `createGoogleCalenderEventActivity` (a no-op unless `isGoogleCalendarReady()` is true — i.e. the OAuth client is configured *and* setup consent has been completed) followed by `sendBookingConfirmationEmailActivity`, in that order within the same workflow. The activities run sequentially so the email — which includes the Meet link when one exists — always reads back a `meetLink` persisted by the calendar step, rather than racing it. `sendBookingConfirmationEmailActivity` sends the invitee a confirmation email via [src/mailer/booking.mailer.ts](src/mailer/booking.mailer.ts); `createGoogleCalenderEventActivity` creates the Google Calendar event via [src/services/google-calender.service.ts](src/services/google-calender.service.ts) and persists `meetLink`/`calendarEventId` onto the booking.
+- `cancelBookingWorkflow` ([src/temporal/workflows/booking-notification.workflow.ts](src/temporal/workflows/booking-notification.workflow.ts)) runs `sendBookingCancellationEmailActivity`, notifying the invitee that their booking was cancelled.
 - `createGoogleCalenderEventWorkflow` ([src/temporal/workflows/google-calender.workflow.ts](src/temporal/workflows/google-calender.workflow.ts)) is the same calendar-event step exposed standalone (`startCreateGoogleCalenderEventWorkflow` in [src/temporal/client.ts](src/temporal/client.ts)). Not called from the booking flow — kept for a future manual/admin re-sync trigger.
 - An independent worker process ([src/temporal/worker.ts](src/temporal/worker.ts)) executes all of the above. Run `pnpm dev:worker` alongside `pnpm dev` for workflows to be picked up, inspect runs in the Temporal UI at `http://localhost:8080`, and check sent emails in the MailHog UI at `http://localhost:8025`.
 

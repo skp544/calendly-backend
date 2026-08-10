@@ -13,7 +13,7 @@ export async function getUserById(id: number) {
   return user;
 }
 
-export async function create(data: createUserDto) {
+export async function create(data: createUserDto & { slug: string }) {
   const user = await prisma.user.create({ data });
 
   return user;
@@ -21,6 +21,12 @@ export async function create(data: createUserDto) {
 
 export async function findByEmail(email: string) {
   const user = await prisma.user.findUnique({ where: { email } });
+
+  return user;
+}
+
+export async function findBySlug(slug: string) {
+  const user = await prisma.user.findUnique({ where: { slug } });
 
   return user;
 }

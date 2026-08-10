@@ -4,6 +4,7 @@ import {
   create,
   deleteById,
   findByEmail,
+  findBySlug,
   getAll,
   getUserById,
   updateById,
@@ -26,6 +27,21 @@ export async function findUserByIdService(id: number) {
   return user;
 }
 
+// Only auto-derived slugs (no explicit slug passed in) get silently
+// disambiguated with a numeric suffix — an explicit slug is a deliberate
+// user choice, so a collision there is surfaced as a conflict instead.
+async function generateUniqueSlug(baseSlug: string) {
+  let candidate = baseSlug;
+  let suffix = 2;
+
+  while (await findBySlug(candidate)) {
+    candidate = `${baseSlug}-${suffix}`;
+    suffix++;
+  }
+
+  return candidate;
+}
+
 export async function createUserService(data: createUserDto) {
   const existingUser = await findByEmail(data.email);
 
@@ -33,8 +49,21 @@ export async function createUserService(data: createUserDto) {
     throw conflict("User already exists!");
   }
 
-  const slugPassed = data.slug ? data.slug : slug(data.name, { lower: true });
-  const user = await create({ ...data, slug: slugPassed }); // todo: make the slug unique
+  let slugPassed: string;
+
+  if (data.slug) {
+    if (await findBySlug(data.slug)) {
+      throw conflict(
+        "A user with this slug already exists, please use a different slug",
+      );
+    }
+
+    slugPassed = data.slug;
+  } else {
+    slugPassed = await generateUniqueSlug(slug(data.name, { lower: true }));
+  }
+
+  const user = await create({ ...data, slug: slugPassed });
 
   return user;
 }
