@@ -6,8 +6,8 @@ import {
   GOOGLE_CLIENT_SECRET,
   GOOGLE_REDIRECT_URI,
   GOOGLE_SENDER_EMAIL,
-  REFRESH_TOKEN,
 } from "../config/env.js";
+import { getRedisClient } from "../config/redis.js";
 import {
   findBookingById,
   updateBookingCalendarDetails,
@@ -20,10 +20,41 @@ const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
+const GOOGLE_INTEGRATION_REDIS_KEY = "google:integration";
+
+interface GoogleIntegration {
+  refreshToken: string;
+  email: string;
+}
+
+async function saveGoogleIntegration(integration: GoogleIntegration) {
+  await getRedisClient().set(
+    GOOGLE_INTEGRATION_REDIS_KEY,
+    JSON.stringify(integration),
+  );
+}
+
+async function getGoogleIntegration(): Promise<GoogleIntegration | null> {
+  const raw = await getRedisClient().get(GOOGLE_INTEGRATION_REDIS_KEY);
+
+  return raw ? (JSON.parse(raw) as GoogleIntegration) : null;
+}
+
 export function isProjectCalenderConfigured(): boolean {
   return Boolean(
     GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI,
   );
+}
+
+// True once the OAuth client is configured AND setup consent has been
+// completed (i.e. a refresh token is sitting in Redis) — used to decide
+// whether the calendar-event activity should run at all.
+export async function isGoogleCalendarReady(): Promise<boolean> {
+  if (!isProjectCalenderConfigured()) return false;
+
+  const integration = await getGoogleIntegration();
+
+  return Boolean(integration?.refreshToken);
 }
 
 export function getGoogleAuthClient(): OAuth2Client {
@@ -69,21 +100,32 @@ export async function exchangeSetupCode(code: string) {
 
   const { data } = await oauth2.userinfo.get();
 
-  // instead of returning it should be store in the redis
-  return {
+  const integration: GoogleIntegration = {
     refreshToken: tokens.refresh_token,
     email: data.email ?? GOOGLE_SENDER_EMAIL,
   };
+
+  await saveGoogleIntegration(integration);
+
+  return integration;
 }
 
-export function getGoogleCalenderClient() {
+export async function getGoogleCalenderClient(): Promise<OAuth2Client> {
   if (!isProjectCalenderConfigured()) {
     throw new Error("Google calender project is not configured");
   }
 
+  const integration = await getGoogleIntegration();
+
+  if (!integration?.refreshToken) {
+    throw new Error(
+      "Google calendar is not authorized yet — complete the OAuth setup flow first",
+    );
+  }
+
   const client = getGoogleAuthClient();
 
-  client.setCredentials({ refresh_token: REFRESH_TOKEN });
+  client.setCredentials({ refresh_token: integration.refreshToken });
 
   return client;
 }
@@ -96,7 +138,7 @@ export async function createGoogleCalenderEvent(bookingId: number) {
     throw notFound("Booking not found or not confirmed");
   }
 
-  const client = getGoogleCalenderClient();
+  const client = await getGoogleCalenderClient();
 
   const calender = google.calendar({
     version: "v3",

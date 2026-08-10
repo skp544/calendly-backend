@@ -11,11 +11,12 @@ A TypeScript + Express REST API for a Calendly-style scheduling backend, backed 
 - **Workflows:** [Temporal](https://temporal.io/) (client + worker) for slot regeneration, booking confirmation emails, and Google Calendar event creation
 - **Email:** [Nodemailer](https://nodemailer.com/) (SMTP), caught locally by MailHog
 - **Calendar:** [googleapis](https://github.com/googleapis/google-api-nodejs-client) — OAuth2 setup flow + calendar event creation with a Google Meet link
+- **Cache/state:** [Redis](https://redis.io/) (via [ioredis](https://github.com/redis/ioredis)) — stores the Google OAuth refresh token/email after setup
 - **Validation:** Zod
 - **Dates/times:** Luxon
 - **Package manager:** pnpm
 - **Dev tooling:** tsx, nodemon
-- **Local infra:** Docker Compose (Temporal server + Temporal UI + MailHog)
+- **Local infra:** Docker Compose (Temporal server + Temporal UI + MailHog + Redis)
 
 ## Project Structure
 
@@ -27,6 +28,7 @@ src/
 │   ├── database.ts                 # Prisma/DB connection
 │   ├── env.ts                      # Environment variable loading
 │   ├── temporal.ts                 # Temporal client connection
+│   ├── redis.ts                    # Redis client connection
 │   └── nodemailer.ts               # SMTP transporter (Nodemailer)
 ├── controllers/                    # Request/response handling
 ├── services/                       # Business logic
@@ -44,7 +46,7 @@ src/
 prisma/
 └── schema.prisma                   # User, EventType, AvailabilityRule,
                                      # AvailabilityException, Slot, Booking models
-docker-compose.yml                  # Temporal server + Temporal UI + MailHog
+docker-compose.yml                  # Temporal server + Temporal UI + MailHog + Redis
 postman_collection.json             # Postman collection covering all API routes
 ```
 
@@ -55,7 +57,7 @@ The codebase follows a layered architecture: **routes → controllers → servic
 - Node.js 18+
 - pnpm (`npm install -g pnpm`)
 - A running PostgreSQL instance
-- Docker (for running Temporal locally)
+- Docker (for running Temporal, MailHog, and Redis locally)
 
 ## Setup
 
@@ -92,12 +94,13 @@ The codebase follows a layered architecture: **routes → controllers → servic
    GOOGLE_REDIRECT_URI="http://localhost:3000/api/v1/integrations/google/callback"
    GOOGLE_SENDER_EMAIL="info@example.com"
    GOOGLE_CALENDER_ID=primary
-   REFRESH_TOKEN=
+
+   REDIS_URL=redis://localhost:6379
    ```
 
    Leave `SMTP_USER`/`SMTP_PASS` empty for MailHog (no auth needed locally); set both to enable SMTP auth against a real provider.
 
-   The `GOOGLE_*` variables are only needed for the Google Calendar integration — see [Google Calendar Integration](#google-calendar-integration) below for how to obtain `REFRESH_TOKEN`. Leaving `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` unset disables the integration (`isProjectCalenderConfigured()` returns `false`) without breaking the rest of the API.
+   The `GOOGLE_*` variables are only needed for the Google Calendar integration — see [Google Calendar Integration](#google-calendar-integration) below for the setup flow. Leaving `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` unset disables the integration (`isProjectCalenderConfigured()` returns `false`) without breaking the rest of the API. `REDIS_URL` is where the OAuth refresh token/email get stored after setup — it's only read by the Google Calendar integration, so it can be left at its default if you're not using that feature yet.
 
 3. Generate the Prisma client and apply the schema:
 
@@ -116,6 +119,7 @@ The codebase follows a layered architecture: **routes → controllers → servic
    - Temporal Web UI: [http://localhost:8080](http://localhost:8080)
    - MailHog SMTP: `localhost:1025`
    - MailHog Web UI (view sent emails): [http://localhost:8025](http://localhost:8025)
+   - Redis: `localhost:6379`
 
 ## Running
 
@@ -161,6 +165,7 @@ All authenticated routes require an `x-host-id` header (numeric user/host ID).
 | DELETE | `/api/v1/availability/exceptions/:id`     | Delete an availability exception      | `x-host-id`    |
 | POST   | `/api/v1/bookings`                        | Book an available slot                | `x-host-id`    |
 | GET    | `/api/v1/bookings`                        | List a host's bookings (filters: `status`, `from`, `to`) | `x-host-id` |
+| GET    | `/api/v1/integrations/google/setup`       | Returns the Google OAuth2 consent URL | – |
 | GET    | `/api/v1/integrations/google/callback`    | OAuth2 redirect target — exchanges `code` for a refresh token | – |
 
 A ready-to-import [postman_collection.json](postman_collection.json) covers every route above with example request bodies and a `baseUrl`/`hostId` variable setup.
@@ -216,9 +221,9 @@ Only `createBookingService` is exposed via `POST /api/v1/bookings` today. After 
 Workflows run asynchronously rather than inline in the request path, all started from [src/temporal/client.ts](src/temporal/client.ts) via `client.workflow.start(...)` — never call a workflow function directly from service code, since it relies on `proxyActivities` and only works inside the Temporal worker sandbox:
 
 - `regenerateHostSlotsWorkflow` ([src/temporal/workflows/slot-generation.workflow.ts](src/temporal/workflows/slot-generation.workflow.ts)) calls the `regenerateHostSlotsActivity` activity to rebuild a host's slots (e.g. after availability rules/exceptions change, or after a booking — scoped to just that slot's date so buffer-adjacent slots get correctly blocked).
-- `sendBookingConfirmationEmailWorkflow` ([src/temporal/workflows/booking-notification.workflow.ts](src/temporal/workflows/booking-notification.workflow.ts)) calls `sendBookingConfirmationEmailActivity`, which sends the invitee a confirmation email via [src/mailer/booking.mailer.ts](src/mailer/booking.mailer.ts).
-- `createGoogleCalenderEventWorkflow` ([src/temporal/workflows/google-calender.workflow.ts](src/temporal/workflows/google-calender.workflow.ts)) calls `createGoogleCalenderEventActivity`, which creates a Google Calendar event with a Meet link via [src/services/google-calender.service.ts](src/services/google-calender.service.ts) and persists `meetLink`/`calendarEventId` onto the booking. Only fired when `isProjectCalenderConfigured()` is true; runs independently of the confirmation email, so there's no ordering guarantee between the two.
-- An independent worker process ([src/temporal/worker.ts](src/temporal/worker.ts)) executes all three. Run `pnpm dev:worker` alongside `pnpm dev` for workflows to be picked up, inspect runs in the Temporal UI at `http://localhost:8080`, and check sent emails in the MailHog UI at `http://localhost:8025`.
+- `confirmBookingWorkflow` ([src/temporal/workflows/booking-notification.workflow.ts](src/temporal/workflows/booking-notification.workflow.ts)) runs `createGoogleCalenderEventActivity` (a no-op unless `isGoogleCalendarReady()` is true — i.e. the OAuth client is configured *and* setup consent has been completed) followed by `sendBookingConfirmationEmailActivity`, in that order within the same workflow. The activities run sequentially so the email — which includes the Meet link when one exists — always reads back a `meetLink` persisted by the calendar step, rather than racing it. `sendBookingConfirmationEmailActivity` sends the invitee a confirmation email via [src/mailer/booking.mailer.ts](src/mailer/booking.mailer.ts); `createGoogleCalenderEventActivity` creates the Google Calendar event via [src/services/google-calender.service.ts](src/services/google-calender.service.ts) and persists `meetLink`/`calendarEventId` onto the booking.
+- `createGoogleCalenderEventWorkflow` ([src/temporal/workflows/google-calender.workflow.ts](src/temporal/workflows/google-calender.workflow.ts)) is the same calendar-event step exposed standalone (`startCreateGoogleCalenderEventWorkflow` in [src/temporal/client.ts](src/temporal/client.ts)). Not called from the booking flow — kept for a future manual/admin re-sync trigger.
+- An independent worker process ([src/temporal/worker.ts](src/temporal/worker.ts)) executes all of the above. Run `pnpm dev:worker` alongside `pnpm dev` for workflows to be picked up, inspect runs in the Temporal UI at `http://localhost:8080`, and check sent emails in the MailHog UI at `http://localhost:8025`.
 
 ## Google Calendar Integration
 
@@ -226,12 +231,12 @@ Booking confirmation can optionally create a Google Calendar event (with a Meet 
 
 1. Configure an OAuth2 client in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) with redirect URI `http://localhost:3000/api/v1/integrations/google/callback` (or your deployed equivalent), and enable the Google Calendar API.
 2. On the OAuth consent screen's **Data Access** page, add the non-sensitive `.../auth/userinfo.email` scope in addition to the calendar scopes — required for the callback to resolve the authorizing account's email.
-3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env`.
-4. Visit the URL returned by `getSetupAuthUrl()` (`GET /api/v1/integrations/google/callback` is only the redirect target, not the entry point — there's no route wired to *generate* the consent URL yet, so call `getSetupAuthUrl()` directly for now) and grant consent.
-5. Google redirects to `/api/v1/integrations/google/callback?code=...`; `exchangeSetupCode` exchanges the code for tokens and returns `{ refreshToken, email }`.
-6. Copy `refreshToken` into `REFRESH_TOKEN` in `.env` — `getGoogleCalenderClient()` uses it to authenticate all subsequent calendar API calls, including the `createGoogleCalenderEventWorkflow` triggered after each booking.
+3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env`, and make sure Redis is running (`docker compose up -d redis`).
+4. `GET /api/v1/integrations/google/setup` returns `{ data: { url } }` — visit that URL and grant consent.
+5. Google redirects to `/api/v1/integrations/google/callback?code=...`; `exchangeSetupCode` exchanges the code for tokens, stores `{ refreshToken, email }` in Redis under the `google:integration` key via [src/config/redis.ts](src/config/redis.ts), and returns the same payload in the response.
+6. From here on, `getGoogleCalenderClient()` reads the refresh token back out of Redis to authenticate every calendar API call — no manual `.env` copy-paste needed. Re-running steps 4–5 overwrites the stored token (e.g. if it's revoked).
 
-Until `REFRESH_TOKEN` (and the other `GOOGLE_*` vars) are set, `isProjectCalenderConfigured()` returns `false` and the calendar workflow is skipped entirely — bookings still succeed without it.
+Until setup is completed (or if `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` are unset), `isGoogleCalendarReady()` returns `false` and the calendar activity is skipped entirely — bookings, and their confirmation emails, still succeed without it.
 
 ## License
 

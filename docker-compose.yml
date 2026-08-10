@@ -30,3 +30,13 @@ services:
     ports:
       - "1025:1025" # SMTP SERVER
       - "8025:8025" # WEB interface
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

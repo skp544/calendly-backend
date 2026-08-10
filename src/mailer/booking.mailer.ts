@@ -13,6 +13,7 @@ export async function sendBookingConfirmationEmail(bookingId: number) {
     `Booking Confirmation : ${bookingId}`,
     `<p>Dear ${booking.inviteeName},</p>
 <p>Your booking for ${booking.eventType.title} on ${when} has been confirmed.</p>
+${booking.meetLink ? `<p>Join via Google Meet: <a href="${booking.meetLink}">${booking.meetLink}</a></p>` : ""}
 <p>Thank you for booking with us</p>
 `,
   );

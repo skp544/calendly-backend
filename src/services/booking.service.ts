@@ -10,11 +10,9 @@ import {
   markSlotAsBookedIfAvailable,
 } from "../repositories/booking.repository.js";
 import {
-  startCreateGoogleCalenderEventWorkflow,
+  startConfirmBookingWorkflow,
   startRegenerateHostSlotWorkflow,
-  startSendBookingConfirmationEmailWorkflow,
 } from "../temporal/client.js";
-import { isProjectCalenderConfigured } from "./google-calender.service.js";
 
 interface BookingWithSlot {
   id: number;
@@ -56,11 +54,7 @@ async function triggerSlotRegeneration(hostId: number, slotStartAt: Date) {
 async function postBookingActions(hostId: number, booking: BookingWithSlot) {
   await triggerSlotRegeneration(hostId, booking.slot.startAt);
 
-  await startSendBookingConfirmationEmailWorkflow(booking.id);
-
-  if (isProjectCalenderConfigured()) {
-    await startCreateGoogleCalenderEventWorkflow(booking.id);
-  }
+  await startConfirmBookingWorkflow(booking.id);
 }
 
 export async function createBookingService(

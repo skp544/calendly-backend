@@ -53,16 +53,16 @@ export async function startRegenerateHostSlotWorkflow(
   );
 }
 
-export async function startSendBookingConfirmationEmailWorkflow(
-  bookingId: number,
-) {
+export async function startConfirmBookingWorkflow(bookingId: number) {
   return startWorkflow(
-    "sendBookingConfirmationEmailWorkflow",
-    `send-booking-confirmation-email-${bookingId}`,
+    "confirmBookingWorkflow",
+    `confirm-booking-${bookingId}`,
     [bookingId],
   );
 }
 
+// Not called from the booking flow — confirmBookingWorkflow already covers
+// that. Kept for a future manual/admin re-sync trigger.
 export async function startCreateGoogleCalenderEventWorkflow(
   bookingId: number,
 ) {

@@ -336,6 +336,18 @@
       "name": "Google Integration",
       "item": [
         {
+          "name": "Get Setup Auth URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/integrations/google/setup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "integrations", "google", "setup"]
+            }
+          }
+        },
+        {
           "name": "OAuth Callback",
           "request": {
             "method": "GET",
