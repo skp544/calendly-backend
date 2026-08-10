@@ -1,6 +1,6 @@
 # Calendly
 
-A TypeScript + Express REST API for a Calendly-style scheduling backend, backed by PostgreSQL (via Prisma) and Temporal for async slot generation and email-notification workflows.
+A TypeScript + Express REST API for a Calendly-style scheduling backend, backed by PostgreSQL (via Prisma) and Temporal for async slot generation, email-notification, and Google Calendar sync workflows.
 
 ## Tech Stack
 
@@ -8,8 +8,9 @@ A TypeScript + Express REST API for a Calendly-style scheduling backend, backed 
 - **Framework:** Express 5
 - **Language:** TypeScript
 - **Database:** PostgreSQL with [Prisma](https://www.prisma.io/) ORM (pg adapter)
-- **Workflows:** [Temporal](https://temporal.io/) (client + worker) for slot regeneration and booking confirmation emails
+- **Workflows:** [Temporal](https://temporal.io/) (client + worker) for slot regeneration, booking confirmation emails, and Google Calendar event creation
 - **Email:** [Nodemailer](https://nodemailer.com/) (SMTP), caught locally by MailHog
+- **Calendar:** [googleapis](https://github.com/googleapis/google-api-nodejs-client) — OAuth2 setup flow + calendar event creation with a Google Meet link
 - **Validation:** Zod
 - **Dates/times:** Luxon
 - **Package manager:** pnpm
@@ -38,12 +39,13 @@ src/
 │   ├── client.ts                   # Starts workflows from the API process
 │   ├── worker.ts                   # Temporal worker entrypoint
 │   ├── activities/                 # Activity implementations
-│   └── workflows/                  # Workflow definitions (slot regeneration, booking confirmation email)
+│   └── workflows/                  # Workflow definitions (slot regeneration, booking confirmation email, Google Calendar event)
 └── utils/                          # ApiError, ApiResponse helpers
 prisma/
 └── schema.prisma                   # User, EventType, AvailabilityRule,
                                      # AvailabilityException, Slot, Booking models
 docker-compose.yml                  # Temporal server + Temporal UI + MailHog
+postman_collection.json             # Postman collection covering all API routes
 ```
 
 The codebase follows a layered architecture: **routes → controllers → services → repositories**.
@@ -84,9 +86,18 @@ The codebase follows a layered architecture: **routes → controllers → servic
    SMTP_USER=
    SMTP_PASS=
    EMAIL_FROM="Calendly <noreply@example.com>"
+
+   GOOGLE_CLIENT_ID=
+   GOOGLE_CLIENT_SECRET=
+   GOOGLE_REDIRECT_URI="http://localhost:3000/api/v1/integrations/google/callback"
+   GOOGLE_SENDER_EMAIL="info@example.com"
+   GOOGLE_CALENDER_ID=primary
+   REFRESH_TOKEN=
    ```
 
    Leave `SMTP_USER`/`SMTP_PASS` empty for MailHog (no auth needed locally); set both to enable SMTP auth against a real provider.
+
+   The `GOOGLE_*` variables are only needed for the Google Calendar integration — see [Google Calendar Integration](#google-calendar-integration) below for how to obtain `REFRESH_TOKEN`. Leaving `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI` unset disables the integration (`isProjectCalenderConfigured()` returns `false`) without breaking the rest of the API.
 
 3. Generate the Prisma client and apply the schema:
 
@@ -150,6 +161,9 @@ All authenticated routes require an `x-host-id` header (numeric user/host ID).
 | DELETE | `/api/v1/availability/exceptions/:id`     | Delete an availability exception      | `x-host-id`    |
 | POST   | `/api/v1/bookings`                        | Book an available slot                | `x-host-id`    |
 | GET    | `/api/v1/bookings`                        | List a host's bookings (filters: `status`, `from`, `to`) | `x-host-id` |
+| GET    | `/api/v1/integrations/google/callback`    | OAuth2 redirect target — exchanges `code` for a refresh token | – |
+
+A ready-to-import [postman_collection.json](postman_collection.json) covers every route above with example request bodies and a `baseUrl`/`hostId` variable setup.
 
 ### Example
 
@@ -186,7 +200,7 @@ Core entities (see `prisma/schema.prisma` for full detail):
 - **AvailabilityRule** — recurring weekly availability window (`weekday` + `startTime`/`endTime`).
 - **AvailabilityException** — one-off override for a specific date (`BLOCK_FULL_DAY`, `BLOCK_PARTIAL`, `ADD_AVAILABLE_WINDOW`).
 - **Slot** — a concrete bookable time window generated from rules/exceptions for a host + event type.
-- **Booking** — an invitee's reservation of a slot.
+- **Booking** — an invitee's reservation of a slot; carries `meetLink`/`calendarEventId` once the Google Calendar event workflow completes.
 
 ## Booking Concurrency Control
 
@@ -195,15 +209,29 @@ Core entities (see `prisma/schema.prisma` for full detail):
 - `createBookingService` — **optimistic**: reads the slot, then commits the booking via a conditional `updateMany` (`WHERE id = ... AND status = 'AVAILABLE'`); if another request booked it first, the update matches zero rows and the request fails fast with `400`.
 - `createBookingServiceWithPessimisticLock` — **pessimistic**: opens with `SELECT ... FOR UPDATE` to lock the slot row for the transaction's duration, so a concurrent booking attempt on the same slot blocks until this one commits or rolls back, then sees the up-to-date status. Not yet wired to a route.
 
-Only `createBookingService` is exposed via `POST /api/v1/bookings` today. After either path commits, `postBookingActions` fires two Temporal workflows for the affected host/booking (see below), and the response is shaped by the shared `formatBookingResponse` helper. `listHostBooking` (backing `GET /api/v1/bookings`) supports filtering by `status`, and by `from`/`to` — matched against the *slot's* start time, not the booking's `createdAt`.
+Only `createBookingService` is exposed via `POST /api/v1/bookings` today. After either path commits, `postBookingActions` fires the Temporal workflows for the affected host/booking (see below), and the response is shaped by the shared `formatBookingResponse` helper. `listHostBooking` (backing `GET /api/v1/bookings`) supports filtering by `status`, and by `from`/`to` — matched against the *slot's* start time, not the booking's `createdAt`.
 
 ## Temporal Workflows
 
-Two workflows run asynchronously rather than inline in the request path, both started from [src/temporal/client.ts](src/temporal/client.ts) via `client.workflow.start(...)` — never call a workflow function directly from service code, since it relies on `proxyActivities` and only works inside the Temporal worker sandbox:
+Workflows run asynchronously rather than inline in the request path, all started from [src/temporal/client.ts](src/temporal/client.ts) via `client.workflow.start(...)` — never call a workflow function directly from service code, since it relies on `proxyActivities` and only works inside the Temporal worker sandbox:
 
 - `regenerateHostSlotsWorkflow` ([src/temporal/workflows/slot-generation.workflow.ts](src/temporal/workflows/slot-generation.workflow.ts)) calls the `regenerateHostSlotsActivity` activity to rebuild a host's slots (e.g. after availability rules/exceptions change, or after a booking — scoped to just that slot's date so buffer-adjacent slots get correctly blocked).
 - `sendBookingConfirmationEmailWorkflow` ([src/temporal/workflows/booking-notification.workflow.ts](src/temporal/workflows/booking-notification.workflow.ts)) calls `sendBookingConfirmationEmailActivity`, which sends the invitee a confirmation email via [src/mailer/booking.mailer.ts](src/mailer/booking.mailer.ts).
-- An independent worker process ([src/temporal/worker.ts](src/temporal/worker.ts)) executes both. Run `pnpm dev:worker` alongside `pnpm dev` for workflows to be picked up, inspect runs in the Temporal UI at `http://localhost:8080`, and check sent emails in the MailHog UI at `http://localhost:8025`.
+- `createGoogleCalenderEventWorkflow` ([src/temporal/workflows/google-calender.workflow.ts](src/temporal/workflows/google-calender.workflow.ts)) calls `createGoogleCalenderEventActivity`, which creates a Google Calendar event with a Meet link via [src/services/google-calender.service.ts](src/services/google-calender.service.ts) and persists `meetLink`/`calendarEventId` onto the booking. Only fired when `isProjectCalenderConfigured()` is true; runs independently of the confirmation email, so there's no ordering guarantee between the two.
+- An independent worker process ([src/temporal/worker.ts](src/temporal/worker.ts)) executes all three. Run `pnpm dev:worker` alongside `pnpm dev` for workflows to be picked up, inspect runs in the Temporal UI at `http://localhost:8080`, and check sent emails in the MailHog UI at `http://localhost:8025`.
+
+## Google Calendar Integration
+
+Booking confirmation can optionally create a Google Calendar event (with a Meet link) on the host's calendar, via [src/services/google-calender.service.ts](src/services/google-calender.service.ts):
+
+1. Configure an OAuth2 client in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) with redirect URI `http://localhost:3000/api/v1/integrations/google/callback` (or your deployed equivalent), and enable the Google Calendar API.
+2. On the OAuth consent screen's **Data Access** page, add the non-sensitive `.../auth/userinfo.email` scope in addition to the calendar scopes — required for the callback to resolve the authorizing account's email.
+3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env`.
+4. Visit the URL returned by `getSetupAuthUrl()` (`GET /api/v1/integrations/google/callback` is only the redirect target, not the entry point — there's no route wired to *generate* the consent URL yet, so call `getSetupAuthUrl()` directly for now) and grant consent.
+5. Google redirects to `/api/v1/integrations/google/callback?code=...`; `exchangeSetupCode` exchanges the code for tokens and returns `{ refreshToken, email }`.
+6. Copy `refreshToken` into `REFRESH_TOKEN` in `.env` — `getGoogleCalenderClient()` uses it to authenticate all subsequent calendar API calls, including the `createGoogleCalenderEventWorkflow` triggered after each booking.
+
+Until `REFRESH_TOKEN` (and the other `GOOGLE_*` vars) are set, `isProjectCalenderConfigured()` returns `false` and the calendar workflow is skipped entirely — bookings still succeed without it.
 
 ## License
 

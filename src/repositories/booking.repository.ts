@@ -107,6 +107,23 @@ export async function findBookingsByHost(
   });
 }
 
+export interface UpdateBookingCalendarDetailsInput {
+  meetLink: string;
+  calendarEventId: string;
+}
+
+export async function updateBookingCalendarDetails(
+  bookingId: number,
+  data: UpdateBookingCalendarDetailsInput,
+) {
+  return prisma.booking.update({
+    where: {
+      id: bookingId,
+    },
+    data,
+  });
+}
+
 export async function findBookingById(bookingId: number) {
   return prisma.booking.findUnique({
     where: {

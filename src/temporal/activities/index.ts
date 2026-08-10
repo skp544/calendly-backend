@@ -3,6 +3,7 @@ import {
   RegenerateHostsSlotInput,
   regenerateHostsSlot as runSlotGeneration,
 } from "../../services/slot.service.js";
+import { createGoogleCalenderEvent } from "../../services/google-calender.service.js";
 
 export async function regenerateHostSlotsActivity(
   input: RegenerateHostsSlotInput,
@@ -12,4 +13,8 @@ export async function regenerateHostSlotsActivity(
 
 export async function sendBookingConfirmationEmailActivity(bookingId: number) {
   await sendBookingConfirmationEmail(bookingId);
+}
+
+export async function createGoogleCalenderEventActivity(bookingId: number) {
+  await createGoogleCalenderEvent(bookingId);
 }

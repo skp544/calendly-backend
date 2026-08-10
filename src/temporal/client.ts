@@ -62,3 +62,13 @@ export async function startSendBookingConfirmationEmailWorkflow(
     [bookingId],
   );
 }
+
+export async function startCreateGoogleCalenderEventWorkflow(
+  bookingId: number,
+) {
+  return startWorkflow(
+    "createGoogleCalenderEventWorkflow",
+    `create-google-calender-event-${bookingId}`,
+    [bookingId],
+  );
+}

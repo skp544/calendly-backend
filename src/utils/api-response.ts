@@ -1,7 +1,7 @@
 import { Response } from "express";
 
 interface SuccessPayload<T> {
-  sucess: true;
+  success: true;
   data: T;
   message?: string;
 }
@@ -12,7 +12,7 @@ export function sendSuccess<T>(
   statusCode = 200,
   message?: string,
 ): void {
-  const body: SuccessPayload<T> = { sucess: true, data };
+  const body: SuccessPayload<T> = { success: true, data };
 
   if (message) body.message = message;
   res.status(statusCode).json(body);
