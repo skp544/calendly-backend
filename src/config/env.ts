@@ -37,3 +37,5 @@ export const GOOGLE_SENDER_EMAIL =
 export const GOOGLE_CALENDER_ID = process.env.GOOGLE_CALENDER_ID || "primary";
 
 export const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+
+export const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";

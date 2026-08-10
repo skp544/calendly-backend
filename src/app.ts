@@ -1,4 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from "express";
+import cors from "cors";
+import { CORS_ORIGIN } from "./config/env.js";
 import userRouter from "./routes/user.routes.js";
 import eventTypeRouter from "./routes/event-type.routes.js";
 import publicEventTypeRouter from "./routes/public-event-type.routes.js";
@@ -17,6 +19,13 @@ function logRequest(req: Request, _res: Response, next: NextFunction) {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  cors({
+    origin: CORS_ORIGIN,
+    credentials: false,
+    allowedHeaders: ["Content-Type", "x-host-id"],
+  }),
+);
 
 // custom routes
 app.get("/health", logRequest, (_req, res) => {

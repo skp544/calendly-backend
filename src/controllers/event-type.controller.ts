@@ -3,10 +3,12 @@ import {
   createEventTypeService,
   getEventTypeByIdService,
   getEventTypeByPublicService,
+  getPublicSlotsService,
   listEventTypeService,
   removeEventTypeService,
   updateEventTypeService,
 } from "../services/event-type.service.js";
+import { ListPublicSlotsQueryDto } from "../dtos/public-slot.dto.js";
 import { sendSuccess } from "../utils/api-response.js";
 
 export async function listEventTypes(req: Request, res: Response) {
@@ -62,4 +64,18 @@ export async function getEventTypeByPublic(req: Request, res: Response) {
   const result = await getEventTypeByPublicService(Number(hostId), String(slug));
 
   sendSuccess(res, result);
+}
+
+export async function getPublicEventTypeSlots(req: Request, res: Response) {
+  const { hostId, slug } = req.params;
+  const { from, to } = req.validatedQuery as ListPublicSlotsQueryDto;
+
+  const slots = await getPublicSlotsService(
+    Number(hostId),
+    String(slug),
+    from,
+    to,
+  );
+
+  sendSuccess(res, slots);
 }

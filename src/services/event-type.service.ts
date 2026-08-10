@@ -12,9 +12,11 @@ import {
   slugExistsForHost,
   update,
 } from "../repositories/event-type.repository.js";
+import { findSlotsByEventTypeInRangeAndStatus } from "../repositories/slot.repository.js";
 import { conflict, forbidden, notFound } from "../utils/api-error.js";
 import { getUserById } from "../repositories/user.repository.js";
 import { startRegenerateHostSlotWorkflow } from "../temporal/client.js";
+import { SLOT_GENERATION_DAYS } from "../config/env.js";
 
 export async function listEventTypeService(hostId: number) {
   const eventType = await getByHostId(hostId);
@@ -145,4 +147,37 @@ export async function getEventTypeByPublicService(
       email: host.email,
     },
   };
+}
+
+export async function getPublicSlotsService(
+  hostId: number,
+  slug: string,
+  from?: string,
+  to?: string,
+) {
+  const eventType = await findActiveByHostIdAndEventSlug(hostId, slug);
+
+  if (!eventType) {
+    throw notFound("Event type not found");
+  }
+
+  const fromDate = from ? new Date(`${from}T00:00:00.000Z`) : new Date();
+  // A "yyyy-mm-dd" `to` means "through the end of that day" — see the same
+  // pattern in booking.service.ts's listHostBooking.
+  const toDate = to
+    ? new Date(`${to}T23:59:59.999Z`)
+    : new Date(Date.now() + SLOT_GENERATION_DAYS * 24 * 60 * 60 * 1000);
+
+  const slots = await findSlotsByEventTypeInRangeAndStatus(
+    eventType.id,
+    fromDate,
+    toDate,
+    ["AVAILABLE"],
+  );
+
+  return slots.map((s) => ({
+    id: s.id,
+    startAt: s.startAt.toISOString(),
+    endAt: s.endAt.toISOString(),
+  }));
 }
